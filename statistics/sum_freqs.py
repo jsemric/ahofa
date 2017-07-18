@@ -30,26 +30,15 @@ class FreqReader:
             for key,val in self.state_freq.items():
                 if log and val != 0:
                     val = math.log(val)
-                yield str(key) + ' ' + str(val) + ' ' + str(self.state_depth[key]) + '\n'
+                yield ' '.join([str(key),str(val),str(self.state_depth[key])]) \
+                      + '\n'
         else:
             for key,val in self.state_freq.items():
-                if log and val != 0:
-                    val = math.log(val)
                 yield str(key) + ' ' + str(val) + '\n'
 
-    def merge_same_depth(self):
-        yield '# depth   frequency\n'
-        inv_depth = defaultdict(set)
-        for key,val in self.state_depth.items():
-            inv_depth[val].add(key)
-
-        for key,val in inv_depth.items():
-            freq = 0
-            cnt = 0
-            for i in val:
-                cnt += 1
-                freq += sum([x for y,x in self.state_freq.items() if y == i])
-            yield str(key) + ' ' + str(freq) + '\n'
+    def freq2log(self):
+        self.state_freq = { key:math.log(val) if val != 0 else 0 \
+                           for key,val in self.state_freq.copy().items() }
 
 def main():
 
@@ -58,32 +47,32 @@ def main():
                         help='input file with automaton')
     parser.add_argument('-o','--output', type=str, metavar='FILE', \
                         help='output file with automaton')
-    parser.add_argument('-m','--merge-depths', action='store_true', \
-                        default=False, help='make gnuplot output')
     parser.add_argument('-d','--print-depths', action='store_true', \
                         default=False, help='make gnuplot output')
-    parser.add_argument('-p','--print-body', action='store_true', \
+    parser.add_argument('-b','--print-body', action='store_true', \
                         default=False, help='print also body of NFA')
     parser.add_argument('-l','--log', action='store_true', \
                         default=False, help='use logarithm')
 
     args = parser.parse_args()
 
-    if args.input is None or args.output is None:
-        sys.stderr.write('Error: no input/output file specified\n')
+    if args.input is None:
+        sys.stderr.write('Error: no input file specified\n')
         sys.exit(1)
 
     fr = FreqReader()
     for f in args.input:
         fr.add_freq(f)
 
-    if args.merge_depths:
-        with open(args.output, 'w') as f:
-            for line in fr.merge_same_depth():
-                f.write(line)
+    if args.log:
+        fr.freq2log()
+
+    if args.output is None:
+        for line in fr.write(args.print_body, args.print_depths):
+            print(line,end='')
     else:
         with open(args.output, 'w') as f:
-            for line in fr.write(args.print_body, args.print_depths, args.log):
+            for line in fr.write(args.print_body, args.print_depths):
                 f.write(line)
 
 
