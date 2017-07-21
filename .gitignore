@@ -1,2 +1,8 @@
 *.o
 nfa_handler
+pcaps
+*.jar
+snort
+*.swp
+*.png
+*data

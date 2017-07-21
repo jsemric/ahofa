@@ -158,15 +158,12 @@ class NFA:
 
     def reduce(self, error=0, depth=None):
 
-        total = max(self.state_freq)
-        omited = 0
-
         # mark states with low frequency
         marked = set()
         for state, freq in enumerate(self.state_freq):
             if freq <= error:
                 marked.add(state)
-
+        '''
         # mark also state which successor has same freq
         border = [q for q in range(self.state_count) if not q in marked \
                   and self.succ[q].issubset(marked)]
@@ -189,28 +186,21 @@ class NFA:
                 p, *_ = self.pred[q]
                 if self.state_freq[p] == self.state_freq[q]:
                     marked.add(p)
-
+#        '''
         marked -= self.initial_states
         # prune all states with all predecessors marked
         to_prun = set([q for q in marked if marked.issuperset(self.pred[q]) \
                       and self.state_depth[q] > depth ])
 
-        # print(to_prun)
-        # rebuild NFA and compute error
+        # rebuild NFA
         state_map = dict()
         cnt = 0
         for state in range(self.state_count):
             if not state in to_prun:
                 state_map[state] = cnt
                 cnt += 1
-                if to_prun.issuperset(self.succ[state]):
-                    for q in self.succ[state]:
-                        tmp = self.state_freq[state]
-                        if self.state_freq[q] != tmp:
-                            omited += self.state_freq[q]
 
         new_transitions = [defaultdict(set) for x in range(cnt)]
-        #print(new_transitions)
         for state, rules in enumerate(self.transitions):
             if state in state_map.keys():
                 for key, value in rules.items():
@@ -219,10 +209,8 @@ class NFA:
                         new_transitions[state_map[state]][key] = set([state_map[q] for q in tmp])
 
         pct = int(100.0*cnt/self.state_count)
-        epct = 100.0*omited/total
         sys.stderr.write('states: ' + str(cnt) + '/' + str(self.state_count) + ' ' + \
                          str(pct) + '%\n')
-        sys.stderr.write('Error: ' + str(omited) + '/' + str(total) + ' ' + str(epct) + '%\n')
         self.transitions = new_transitions
         self.final_states = set([x for x in range(cnt) if not self.transitions[x]])
         self.state_count = cnt

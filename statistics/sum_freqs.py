@@ -5,6 +5,8 @@ import argparse
 from collections import defaultdict
 import sys
 import math
+import re
+import glob
 
 class FreqReader:
 
@@ -16,7 +18,7 @@ class FreqReader:
     def add_freq(self, fname):
         with open(fname, 'r') as f:
             string = f.read()
-            self.body, rest = string.split('=====\n')
+            self.body, rest = re.split('=+\n', string)
             for line in rest.split('\n'):
                 if line:
                     s, f, d = line.split()
@@ -62,7 +64,8 @@ def main():
 
     fr = FreqReader()
     for f in args.input:
-        fr.add_freq(f)
+        for i in glob.glob(f):
+            fr.add_freq(i)
 
     if args.log:
         fr.freq2log()
