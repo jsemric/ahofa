@@ -28,6 +28,7 @@ class FreqReader:
     def write(self, body=False, depth=False, log=False):
         if body:
             yield self.body
+            yield "=====\n"
         if depth:
             for key,val in self.state_freq.items():
                 if log and val != 0:
@@ -39,7 +40,7 @@ class FreqReader:
                 yield str(key) + ' ' + str(val) + '\n'
 
     def freq2log(self):
-        self.state_freq = { key:math.log(val) if val != 0 else 0 \
+        self.state_freq = { key:math.log(val)*20 if val != 0 else 0 \
                            for key,val in self.state_freq.copy().items() }
 
 def main():
