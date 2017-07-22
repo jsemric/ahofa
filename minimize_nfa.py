@@ -28,14 +28,22 @@ def fa_to_ba_format(input, output):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i','--input', type=str, metavar='FILE', help='input file with automaton')
-    parser.add_argument('-o','--output', type=str, metavar='FILE', help='output file with automaton')
+    parser.add_argument('-i','--input', type=str, metavar='FILE',
+    help='input file with automaton')
+    parser.add_argument('-o','--output', type=str, metavar='FILE',
+    help='output file with automaton')
+    parser.add_argument('-b','--to-ba', action='store_true', help='converts FA \
+    format to BA format, does not reduce the NFA')
 
     args = parser.parse_args()
 
     if args.input is None or args.output is None:
         sys.stderr.write('Error: no input/output file specified\n')
         sys.exit(1)
+
+    if args.to_ba:
+        fa_to_ba_format(args.input, args.output)
+        return
 
     tmpf1 = "tmpfile1"
     tmpf2 = "tmpfile2"

@@ -41,6 +41,7 @@ void compute_frequencies(const std::vector<std::string> &pcaps, const std::strin
     }
 
     nfa.print(out);
+    out << "=====\n";
     nfa.print_freq(out);
 }
 

@@ -205,7 +205,7 @@ class NFA:
             if state in state_map.keys():
                 for key, value in rules.items():
                     tmp = value - to_prun
-                    if tmp:
+                    if tmp and not value & to_prun:
                         new_transitions[state_map[state]][key] = set([state_map[q] for q in tmp])
 
         pct = int(100.0*cnt/self.state_count)
@@ -244,6 +244,9 @@ def main():
         a.process_packets(args.pcap)
 
     a.reduce(args.max_freq, args.depth)
+
+
+#    a.add_selfloops_to_final_states()
 
     if args.output:
         with open(args.output, 'w') as out:
