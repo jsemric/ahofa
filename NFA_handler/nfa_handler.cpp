@@ -75,6 +75,36 @@ void compute_error(const std::vector<std::string> &pcaps, const std::string &str
     unsigned long total = 0;
     unsigned long acc1 = 0;
     unsigned long acc2 = 0;
+    for (auto &p : pcaps) {
+        PcapReader pcap_reader;
+        pcap_reader.open(p);
+        pcap_reader.process_packets(
+        [&total, &acc1, &acc2, &nfa1, &nfa2](const unsigned char* payload, unsigned length)
+        {
+            total++;
+            bool b1 = nfa1.accept(payload, length);
+            bool b2 = nfa2.accept(payload, length);
+            acc1 += b1; acc2 += b2;
+            if (b1 && !b2) {
+                std::cerr << "NFA is not over-approximation of target NFA.\n";
+                exit(1);
+            }
+        }, ~0LL);
+    }
+
+    out << "Total: " << total << "\n";
+    out << str1 << ": " << acc1 << "\n";
+    out << str2 << ": " << acc2 << "\n";
+}
+
+void compute_error_fast(const std::vector<std::string> &pcaps, const std::string &str1,
+                        const std::string &str2, std::ostream &out)
+{
+    NFA nfa1 = read_nfa(str1);
+    NFA nfa2 = read_nfa(str2);
+    unsigned long total = 0;
+    unsigned long acc1 = 0;
+    unsigned long acc2 = 0;
     // TODO copy and parallel run in loop
     for (auto &p : pcaps) {
         PcapReader pcap_reader;

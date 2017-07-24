@@ -2,17 +2,23 @@
 
 reset
 
-if (!exists("filename")) filename='data1'
-if (!exists("out")) out='output.png'
+if (!exists("filename")) {
+    exit
+}
 
-set terminal png size 1024,768
-set output out
+if (exists("out")) {
+    set terminal png size 1024,848
+    set output out
+}
 
-set title "NFA packet filtering statistics"
+set title "NFA state labeling"
 set xlabel "state index"
 set ylabel "log(packets)/depth"
 set grid
 set style data lines
 
 plot filename using 1:2 title "log packets", "" using 1:3 title "depth"
-pause -1
+
+if (!exists("out")) {
+    pause -1
+}
