@@ -86,14 +86,12 @@ class NFA:
     ###########################################################################
 
     def write_fa(self):
-        for qs in self.initial_states:
-            yield str(qs)
+        yield from self.initial_states
         for state, rules in enumerate(self.transitions):
             for key, value in rules.items():
                 for q in value:
                     yield ' '.join((str(state),str(q),hex(key)))
-        for qf in self.final_states:
-            yield str(qf)
+        yield from self.final_states
 
     def print_fa(self):
         for line in self.write_fa():
@@ -156,80 +154,81 @@ class NFA:
             for c in range(256):
                 self.transitions[x][c] = set([x])
 
-    def reduce(self, error=0, depth=None):
-
-        # mark states with low frequency
-        marked = set()
-        for state, freq in enumerate(self.state_freq):
-            if freq <= error:
-                marked.add(state)
-        '''
-        # mark also state which successor has same freq
-        border = [q for q in range(self.state_count) if not q in marked \
-                  and self.succ[q].issubset(marked)]
-
+    def remove_unreachable(self):
+        actual = self.initial_states
+        reached = set()
+        depth = 0
         while True:
-            new_bord = []
-            for p in border:
-                freq = 0
-                for q in self.succ[p]:
-                    freq += self.state_freq[p]
-                if freq == self.state_freq:
-                    makred.add(p)
-                    new_bodr.append(p)
-
-            if not new_bord:
+            reached = reached.union(actual)
+            new = set()
+            for q in actual:
+                new = new.union(self.succ[q])
+            new -= reached
+            actual = new
+            if not new:
                 break
 
-        for q in range(self.state_count):
-            if q in marked and len(self.pred[q]) == 1:
-                p, *_ = self.pred[q]
-                if self.state_freq[p] == self.state_freq[q]:
-                    marked.add(p)
-#        '''
-        marked -= self.initial_states
-        # prune all states with all predecessors marked
-        to_prun = set([q for q in marked if marked.issuperset(self.pred[q]) \
-                      and self.state_depth[q] > depth ])
-
-        # rebuild NFA
         state_map = dict()
         cnt = 0
-        for state in range(self.state_count):
-            if not state in to_prun:
-                state_map[state] = cnt
-                cnt += 1
+        for x in reached:
+            state_map[x] = cnt
+            cnt += 1
 
-        new_transitions = [defaultdict(set) for x in range(cnt)]
+        out = NFA()
+        out.state_count = cnt
+        out.transitions = [defaultdict(set) for x in range(cnt)]
         for state, rules in enumerate(self.transitions):
-            if state in state_map.keys():
-                for key, value in rules.items():
-                    tmp = value - to_prun
-                    if tmp and not value & to_prun:
-                        new_transitions[state_map[state]][key] = set([state_map[q] for q in tmp])
+            if state in state_map:
+                for key, val in rules.items():
+                    out.transitions[state_map[state]][key] = set([state_map[x] \
+                    for x in val if x in state_map])
 
-        pct = int(100.0*cnt/self.state_count)
-        sys.stderr.write('states: ' + str(cnt) + '/' + str(self.state_count) + ' ' + \
-                         str(pct) + '%\n')
-        self.transitions = new_transitions
-        self.final_states = set([x for x in range(cnt) if not self.transitions[x]])
-        self.state_count = cnt
-        self.state_freq = list()
-        self._compute_pred_and_succ()
-        self._compute_depth()
+        out.initial_states = [state_map[x] for x in self.initial_states]
+        out.final_states = [state_map[x] for x in self.final_states \
+                           if x in state_map]
+        out._compute_pred_and_succ()
+        out._compute_depth()
+
+        return out
+
+
+    def reduce(self, error=0, depth=10000):
+        final_state_label = self.state_count
+        new_transitions = [defaultdict(set) for x in range(self.state_count+1)]
+        for state, rules in enumerate(self.transitions):
+            for key, val in rules.items():
+                new_transitions[state][key] = \
+                set([x if not self.state_freq[x] <= error and \
+                self.state_depth[x] >= depth else final_state_label \
+                for x in val])
+
+        out = NFA()
+        out.transitions = new_transitions
+        out.state_count = self.state_count + 1
+        out.final_states = self.final_states.copy()
+        out.initial_states = self.initial_states.copy()
+        out.final_states.add(final_state_label)
+        out._compute_pred_and_succ()
+
+        return out.remove_unreachable()
 
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i','--input', type=str, metavar='FILE', help='input file with automaton')
-    parser.add_argument('-o','--output', type=str, metavar='FILE', help='output file, if not \
-    specified everything is printed to stdout')
-    parser.add_argument('-p','--pcap', type=str, metavar='FILE',help='pcap file')
+    parser.add_argument('-i','--input', type=str, metavar='FILE',
+                        help='input file with automaton')
+    parser.add_argument('-o','--output', type=str, metavar='FILE',
+                        help='output file, if not specified everything is \
+                        printed to stdout')
+    parser.add_argument('-p','--pcap', type=str, metavar='FILE',
+                        help='pcap file')
+    parser.add_argument('-s','--add-sl', action='store_true',
+                        help='add self-loops to final states')
     # reduction arguments
-    parser.add_argument('-m','--max-freq',type=int, metavar='MAX', default=0, help='max frequency \
-    of pruned state')
-    parser.add_argument('-d','--depth',type=int, metavar='DEPTH', default=0, help='min depth of \
-    pruned state')
+    parser.add_argument('-m','--max-freq',type=int, metavar='MAX', default=0,
+                        help='max frequency of pruned state')
+    parser.add_argument('-d','--depth',type=int, metavar='DEPTH', default=0,
+                        help='min depth of pruned state')
 
     args = parser.parse_args()
 
@@ -243,15 +242,14 @@ def main():
     if args.pcap:
         a.process_packets(args.pcap)
 
-    a.reduce(args.max_freq, args.depth)
-
-
-#    a.add_selfloops_to_final_states()
+    a = a.reduce(args.max_freq, args.depth)
+    if args.add_sl:
+        a.add_selfloops_to_final_states()
 
     if args.output:
         with open(args.output, 'w') as out:
             for line in a.write_fa():
-                out.write(line + '\n')
+                out.write(str(line) + '\n')
     else:
         a.print_fa()
 

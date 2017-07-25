@@ -163,13 +163,17 @@ int main(int argc, char **argv) {
         std::ostream *output = &std::cout;
         if (varmap.count("output")) {
             output = new std::ofstream{out};
+            if (!static_cast<std::ofstream*>(output)->is_open()) {
+                std::cerr << "Error: cannot open output file " << out << "\n";
+                return 1;
+            }
         }
 
         if (varmap.count("frequencies")) {
             compute_frequencies(pcaps, nfa_str1, *output);
         }
         else if (varmap.count("automaton")) {
-            compute_error(pcaps, nfa_str1, nfa_str2, *output);
+            compute_error_fast(pcaps, nfa_str1, nfa_str2, *output);
         }
         else {
             compute_accepted(pcaps, nfa_str1, *output);
