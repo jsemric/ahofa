@@ -12,7 +12,7 @@ class AutomatonException(Exception):
     def __str__(self):
         return self.arg
 
-class NFA:
+class NetworkNFA:
 
     RE_transition_FA_format = re.compile('^\w+\s+\w+\s+\w+$')
     RE_state_FA_format = re.compile('^\w+$')
@@ -28,6 +28,7 @@ class NFA:
         self.succ = list()
         self.pred = list()
         self.state_depth = list()
+        self.total_freq = 0
 
     def _add_state(self, state):
         if not state in self.state_map:
@@ -107,25 +108,25 @@ class NFA:
 
                 if rules == 0:
                     # read initial state(s)
-                    if NFA.RE_state_FA_format.match(line):
+                    if NetworkNFA.RE_state_FA_format.match(line):
                         self._add_initial_state(line)
-                    elif NFA.RE_transition_FA_format.match(line):
+                    elif NetworkNFA.RE_transition_FA_format.match(line):
                         rules = 1
                         self._add_rule(*line.split())
                     else:
                         raise AutomatonException('invalid syntax ' + line)
                 elif rules == 1:
                     # read transitions
-                    if NFA.RE_transition_FA_format.match(line):
+                    if NetworkNFA.RE_transition_FA_format.match(line):
                         self._add_rule(*line.split())
-                    elif NFA.RE_state_FA_format.match(line):
+                    elif NetworkNFA.RE_state_FA_format.match(line):
                         self._add_final_state(line)
                         rules = 2
                     else:
                         raise AutomatonException('invalid syntax: ' + line)
                 elif rules == 2:
                     # read final states
-                    if NFA.RE_state_FA_format.match(line):
+                    if NetworkNFA.RE_state_FA_format.match(line):
                         self._add_final_state(line)
                     elif line.startswith('====='):
                         self.state_freq = [0 for x in range(self.state_count)]
@@ -133,21 +134,21 @@ class NFA:
                     else:
                         raise AutomatonException('invalid syntax: ' + line)
                 else:
-                    if NFA.RE_state_freq_FA_format.match(line):
+                    if NetworkNFA.RE_state_freq_FA_format.match(line):
                         self._add_freq(*line.split())
                     else:
                         raise AutomatonException('invalid syntax: ' + line)
 
         self._compute_pred_and_succ()
         self._compute_depth()
+        self.total_freq = max(self.state_freq)
+        for x in self.initial_states:
+            self.state_freq[x] = self.total_freq
 
 
     ###########################################################################
     #   Reduction, etc.                                                       #
     ###########################################################################
-
-    def process_packets(self, pcapfile):
-        pass
 
     def add_selfloops_to_final_states(self):
         for x in self.final_states:
@@ -157,7 +158,6 @@ class NFA:
     def remove_unreachable(self):
         actual = self.initial_states
         reached = set()
-        depth = 0
         while True:
             reached = reached.union(actual)
             new = set()
@@ -174,7 +174,7 @@ class NFA:
             state_map[x] = cnt
             cnt += 1
 
-        out = NFA()
+        out = NetworkNFA()
         out.state_count = cnt
         out.transitions = [defaultdict(set) for x in range(cnt)]
         for state, rules in enumerate(self.transitions):
@@ -192,25 +192,46 @@ class NFA:
         return out
 
 
-    def reduce(self, error=0, depth=10000):
+    def state_error(self, state):
+        sf = self.state_freq[state]
+        return 0 if sf == 0 else sf / self.total_freq
+
+    def reduce(self, error=0, depth=0):
+        marked = set()
+        srt_states = sorted([x for x in range(self.state_count) \
+                            if self.state_depth[x] >= depth], \
+                            key=lambda x : self.state_freq[x])
+
+        for state in srt_states:
+            err = self.state_error(state)
+            assert (err >= 0 and err <= 1)
+            if err <= error:
+                marked.add(state)
+                error -= err
+            else:
+                break
+
         final_state_label = self.state_count
         new_transitions = [defaultdict(set) for x in range(self.state_count+1)]
         for state, rules in enumerate(self.transitions):
             for key, val in rules.items():
                 new_transitions[state][key] = \
-                set([x if not self.state_freq[x] <= error and \
-                self.state_depth[x] >= depth else final_state_label \
-                for x in val])
+                set([x if x not in marked else final_state_label for x in val])
 
-        out = NFA()
+        out = NetworkNFA()
         out.transitions = new_transitions
         out.state_count = self.state_count + 1
         out.final_states = self.final_states.copy()
         out.initial_states = self.initial_states.copy()
         out.final_states.add(final_state_label)
         out._compute_pred_and_succ()
+        out = out.remove_unreachable()
+        sys.stderr.write(str(out.state_count) + '/' + str(self.state_count) + '\n')
 
-        return out.remove_unreachable()
+        return out
+
+    def merge_states(self, state1, state2):
+        pass
 
 def main():
 
@@ -220,12 +241,10 @@ def main():
     parser.add_argument('-o','--output', type=str, metavar='FILE',
                         help='output file, if not specified everything is \
                         printed to stdout')
-    parser.add_argument('-p','--pcap', type=str, metavar='FILE',
-                        help='pcap file')
     parser.add_argument('-s','--add-sl', action='store_true',
                         help='add self-loops to final states')
     # reduction arguments
-    parser.add_argument('-m','--max-freq',type=int, metavar='MAX', default=0,
+    parser.add_argument('-e','--max-error',type=float, metavar='ERR', default=0,
                         help='max frequency of pruned state')
     parser.add_argument('-d','--depth',type=int, metavar='DEPTH', default=0,
                         help='min depth of pruned state')
@@ -236,20 +255,17 @@ def main():
         sys.stderr.write('Error: no input specified\n')
         sys.exit(1)
 
-    a = NFA()
+    a = NetworkNFA()
     a.parse_fa_file(args.input)
 
-    if args.pcap:
-        a.process_packets(args.pcap)
-
-    a = a.reduce(args.max_freq, args.depth)
+    a = a.reduce(args.max_error, args.depth)
     if args.add_sl:
         a.add_selfloops_to_final_states()
 
     if args.output:
         with open(args.output, 'w') as out:
             for line in a.write_fa():
-                out.write(str(line) + '\n')
+                print(line, file=out)
     else:
         a.print_fa()
 
