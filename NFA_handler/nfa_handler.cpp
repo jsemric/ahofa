@@ -2,19 +2,24 @@
 #include <exception>
 #include <vector>
 #include <boost/program_options.hpp>
-#include <system_error>
+#include <ctype.h>
+#include <stdexcept>
+
 #include "nfa.h"
 #include "pcap_reader.h"
 
+const char *helpstr =
+"Usage: ./nfa_handler [OPTIONS]\n"
+"Compute the number of accepted packets by NFA if none of options -a, -f, -b are set.\n";
+
 namespace po = boost::program_options;
-#define db(x) std::cout << x << "\n"
 
 NFA read_nfa(const std::string &fname) {
     NFA nfa;
     std::ifstream input{fname};
 
     if (!input.is_open()) {
-        throw std::system_error();
+        throw std::runtime_error("cannot open NFA file '" + fname + "'");
     }
 
     nfa.read_from_file(input);
@@ -24,7 +29,7 @@ NFA read_nfa(const std::string &fname) {
 }
 
 void compute_frequencies(const std::vector<std::string> &pcaps, const std::string &str,
-                         std::ostream &out)
+                         bool one_per_packet, std::ostream &out)
 {
     // TODO copy and parallel run in loop
     NFA nfa = read_nfa(str);
@@ -32,11 +37,20 @@ void compute_frequencies(const std::vector<std::string> &pcaps, const std::strin
     for (auto &p : pcaps) {
         PcapReader pcap_reader;
         pcap_reader.open(p);
-        pcap_reader.process_packets(
-        [&nfa](const unsigned char* payload, unsigned length)
-        {
-            nfa.compute_frequency(payload, length);
-        }, ~0LL);
+        if (one_per_packet) {
+            pcap_reader.process_packets(
+            [&nfa](const unsigned char* payload, unsigned length)
+            {
+                nfa.compute_packet_frequency(payload, length);
+            }, ~0LL);
+        }
+        else {
+            pcap_reader.process_packets(
+            [&nfa](const unsigned char* payload, unsigned length)
+            {
+                nfa.compute_frequency(payload, length);
+            }, ~0LL);
+        }
         // TODO nfa -> steal freqs
     }
 
@@ -59,7 +73,9 @@ void compute_accepted(const std::vector<std::string> &pcaps, const std::string &
         [&total, &accepted, &nfa](const unsigned char* payload, unsigned length)
         {
             total++;
-            accepted += nfa.accept(payload, length);
+            if (nfa.accept(payload, length)) {
+                accepted++;
+            }
         }, ~0LL);
     }
 
@@ -145,20 +161,25 @@ int main(int argc, char **argv) {
     desc.add_options()
     ("help,h", "show this help and exit")
     ("pcap,p", po::value(&pcaps)->value_name("PCAP")->required(), "pcap file")
-    ("target,t", po::value(&nfa_str1)->value_name("NFA")->required(), "nfa file")
-    ("automaton,a", po::value(&nfa_str2)->value_name("NFA"), "nfa file")
-    ("frequencies,f", "compute frequencies of NFA")
+    ("target,t", po::value(&nfa_str1)->value_name("NFA")->required(), "file with NFA")
+    ("automaton,a", po::value(&nfa_str2)->value_name("NFA"), "file with NFA, which suppose to be "
+     "an over-approximation of the first NFA set by -t option")
+    ("packet-freq,f", "compute a packet frequency of each state NFA")
+    ("byte-freq,b", "compute frequencies of bytes instead of packets NFA")
     ("output,o", po::value(&out)->value_name("FILE"), "output file");
 
     po::variables_map varmap;
     try {
         po::store(po::parse_command_line(argc, argv, desc), varmap);
         if (argc == 1 || varmap.count("help")) {
+            std::cout << helpstr << std::endl;
             std::cout << desc << std::endl;
             return 0;
         }
         po::notify(varmap);
-        conflict_options(varmap, "frequencies", "automaton");
+        conflict_options(varmap, "byte-freq", "automaton");
+        conflict_options(varmap, "packet-freq", "automaton");
+        conflict_options(varmap, "packet-freq", "byte-freq");
 
         std::ostream *output = &std::cout;
         if (varmap.count("output")) {
@@ -169,8 +190,8 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (varmap.count("frequencies")) {
-            compute_frequencies(pcaps, nfa_str1, *output);
+        if (varmap.count("byte-freq") || varmap.count("packet-freq")) {
+            compute_frequencies(pcaps, nfa_str1, varmap.count("packet-freq"), *output);
         }
         else if (varmap.count("automaton")) {
             compute_error_fast(pcaps, nfa_str1, nfa_str2, *output);

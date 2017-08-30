@@ -10,7 +10,8 @@
 #include <fstream>
 #include <iostream>
 #include <stdio.h>
-#include <system_error>
+#include <stdexcept>
+
 // C and pcap headers
 #include <pcap.h>
 #include <pcap/pcap.h>
@@ -23,6 +24,7 @@
 #include <netinet/udp.h>
 #include <net/ethernet.h>
 #include <string.h>
+
 // own headers
 #include "pcap_reader.h"
 
@@ -34,7 +36,7 @@ PcapReader::PcapReader() : pcap{0}, err_buf{""}, header{0}, packet{0}
 PcapReader::PcapReader(const std::string &fname) : err_buf{""}, header{0}, packet{0}
 {
     if (!(pcap = pcap_open_offline(fname.c_str(), err_buf))) {
-        throw std::system_error{};
+        throw std::runtime_error("cannot open pcap file '" + std::string(fname) + "'");
     }
 }
 
@@ -53,7 +55,7 @@ void PcapReader::open(const std::string &input)
     }
 
     if (!(pcap = pcap_open_offline(input.c_str(), err_buf))) {
-        throw std::system_error{};
+        throw std::runtime_error("cannot open pcap file '" + input + "'");
     }
 }
 

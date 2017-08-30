@@ -14,6 +14,8 @@
 #include <map>
 #include <set>
 #include <exception>
+#include <stdio.h>
+#include <ctype.h>
 
 template <typename T1, typename T2, typename T3>
 struct Triple
@@ -67,6 +69,9 @@ public:
     template<typename U>
     inline void compute_frequency(const U word, unsigned length);
 
+    template<typename U>
+    inline void compute_packet_frequency(const U word, unsigned length);
+
     void print(std::ostream &out = std::cout) const;
     void print_freq(std::ostream &out = std::cout) const;
     void read_from_file(std::ifstream &input);
@@ -76,6 +81,18 @@ private:
     void update_freq() noexcept;
 };
 
+
+static void print_readable(const unsigned char *payload, unsigned length) {
+    for (unsigned i = 0; i < length; i++) {
+        if (isprint(payload[i])) {
+            printf("%c", payload[i]);
+        }
+        else {
+            printf("\\x%.2x", payload[i]);
+        }
+    }
+    printf("\n");
+}
 
 template<typename U>
 inline bool NFA::accept(const U word, unsigned length) const
@@ -90,6 +107,7 @@ inline bool NFA::accept(const U word, unsigned length) const
             if (!trans.empty()) {
                 for (auto k : trans) {
                     if (final_states.find(k) != final_states.end()) {
+                        print_readable(word, i+1);
                         return true;
                     }
                     tmp.insert(k);
@@ -103,7 +121,7 @@ inline bool NFA::accept(const U word, unsigned length) const
 }
 
 template<typename U>
-inline void NFA::compute_frequency(const U word, unsigned length)
+inline void NFA::compute_packet_frequency(const U word, unsigned length)
 {
     std::set<unsigned long> actual{initial_state};
 
@@ -129,6 +147,27 @@ inline void NFA::compute_frequency(const U word, unsigned length)
     }
 
     update_freq();
+}
+
+template<typename U>
+inline void NFA::compute_frequency(const U word, unsigned length)
+{
+    std::set<unsigned long> actual{initial_state};
+
+    for (unsigned i = 0; i < length && !actual.empty(); i++) {
+        std::set<unsigned long> tmp;
+        for (auto j : actual) {
+            assert ((j << shift) + word[j] < transitions.size());
+            auto trans = transitions[(j << shift) + word[i]];
+            if (!trans.empty()) {
+                for (auto k : trans) {
+                    state_freq[k]++;
+                    tmp.insert(k);
+                }
+            }
+        }
+        actual = std::move(tmp);
+    }
 }
 
 inline void NFA::update_freq() noexcept
