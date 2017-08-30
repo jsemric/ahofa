@@ -245,9 +245,11 @@ def main():
                         help='add self-loops to final states')
     # reduction arguments
     parser.add_argument('-e','--max-error',type=float, metavar='ERR', default=0,
-                        help='max frequency of pruned state')
+                        help='idk')
     parser.add_argument('-d','--depth',type=int, metavar='DEPTH', default=0,
                         help='min depth of pruned state')
+    parser.add_argument('-m','--merge-rate',type=float, metavar='N', default=0,
+                        help='idk')
 
     args = parser.parse_args()
 
