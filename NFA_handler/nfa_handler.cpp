@@ -136,10 +136,11 @@ void compute_error_fast(const std::vector<std::string> &pcaps, const std::string
         }, ~0LL);
     }
 
-    out << str1 << " <+> " << str2 << "\n";
+    out << total << " " << acc1 <<  " " << acc2 << std::endl;
+/*    out << str1 << " <+> " << str2 << "\n";
     out << "=====\n";
     out << "Total: " << total << "\n";
-    out << "Error: " << acc2 << "/" << acc1 << " " << 1.0*(acc2 - acc1)/total << "\n";
+    out << "Error: " << acc2 << "/" << acc1 << " " << 1.0*(acc2 - acc1)/total << "\n";*/
 }
 
 void conflict_options(const po::variables_map &vm, const std::string &opt1,

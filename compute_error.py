@@ -31,7 +31,7 @@ def compute_error():
 
     def ce_inst():
         prog = ' '.join(['./nfa_handler -t',aut1,'-a',aut2,'-p',pcap])
-        subprocess.run(prog.split(),stdout=out)
+        subprocess.call(prog.split(),stdout=out)
 
     ce_inst.set_output = set_output
     ce_inst.set_pcap = set_pcap
@@ -56,11 +56,7 @@ def run_in_parallel(*fns):
         proc.append(p)
     for p in proc:
         p.join()
-'''
-def run_in_parallel(*fns):
-    for fn in fns:
-        fn()
-'''
+
 def parallel_proc(fns, cores):
     flist = []
     for i,f in enumerate(fns):
@@ -86,17 +82,21 @@ def main():
             for f in glob.glob(args.pcaps)]
     parallel_proc(pfns, args.cores)
 
-    out=None
-    if args.output:
-        out = open(args.output,'w')
-
+    total, acc1, acc2 = 0, 0, 0
     for f in [func.get_output_file() for func in pfns]:
         f.seek(0)
-        print(f.read(),file=out)
+        t, a1, a2 = f.read().split()
+        total += int(t)
+        acc1 += int(a1)
+        acc2 += int(a2)
         f.close()
 
+    out = 'Total: {}\nAccepted1: {}\nAccepted2: {}\n'.format(total, acc1, acc2)
     if args.output:
-        out.close()
+        with open(args.output,'w') as f:
+            f.write(out)
+    else:
+        print(out,end='')
 
 if __name__ == "__main__":
     main()
