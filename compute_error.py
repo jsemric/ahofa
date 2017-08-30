@@ -32,7 +32,6 @@ def compute_error():
     def ce_inst():
         prog = ' '.join(['./nfa_handler -t',aut1,'-a',aut2,'-p',pcap])
         subprocess.run(prog.split(),stdout=out)
-        print(prog,' has been finished.')
 
     ce_inst.set_output = set_output
     ce_inst.set_pcap = set_pcap
@@ -86,10 +85,18 @@ def main():
     pfns = [create_err_func(args.target,args.aut,f) \
             for f in glob.glob(args.pcaps)]
     parallel_proc(pfns, args.cores)
+
+    out=None
+    if args.output:
+        out = open(args.output,'w')
+
     for f in [func.get_output_file() for func in pfns]:
         f.seek(0)
-        print(f.read())
+        print(f.read(),file=out)
         f.close()
+
+    if args.output:
+        out.close()
 
 if __name__ == "__main__":
     main()
