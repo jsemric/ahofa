@@ -81,7 +81,7 @@ private:
     void update_freq() noexcept;
 };
 
-
+/*
 static void print_readable(const unsigned char *payload, unsigned length) {
     for (unsigned i = 0; i < length; i++) {
         if (isprint(payload[i])) {
@@ -93,7 +93,7 @@ static void print_readable(const unsigned char *payload, unsigned length) {
     }
     printf("\n");
 }
-
+*/
 template<typename U>
 inline bool NFA::accept(const U word, unsigned length) const
 {
@@ -107,7 +107,7 @@ inline bool NFA::accept(const U word, unsigned length) const
             if (!trans.empty()) {
                 for (auto k : trans) {
                     if (final_states.find(k) != final_states.end()) {
-                        print_readable(word, i+1);
+//                        print_readable(word, i+1);
                         return true;
                     }
                     tmp.insert(k);

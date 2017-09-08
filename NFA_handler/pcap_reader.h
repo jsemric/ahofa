@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <stdio.h>
+#include <cassert>
 
 #include <pcap.h>
 #include <pcap/pcap.h>
@@ -22,9 +23,9 @@
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+#include <netinet/ip_icmp.h>
+#include <netinet/icmp6.h>
 #include <net/ethernet.h>
-
-#define MIN_PACKET 60
 
 /// Class PcapReader for reading and processing packets in packet caputure files.
 class PcapReader
@@ -35,9 +36,16 @@ private:
     struct pcap_pkthdr *header;
     const unsigned char *packet;
 
+    struct vlan_ethhdr {
+        u_int8_t  ether_dhost[ETH_ALEN];  /* destination eth addr */
+        u_int8_t  ether_shost[ETH_ALEN];  /* source ether addr    */
+        u_int16_t h_vlan_proto;
+        u_int16_t h_vlan_TCI;
+        u_int16_t ether_type;
+    } __attribute__ ((__packed__));
+
 private:
     inline const unsigned char *get_payload();
-    inline const unsigned char *parse_ip(const unsigned char*) const;
 
 public:
     PcapReader();
@@ -74,87 +82,90 @@ void PcapReader::process_packets(F func, unsigned long count)
     }
 }
 
-/// Parses a packet and return a pointer to a first byte of payload.
 inline const unsigned char *PcapReader::get_payload()
 {
+    const unsigned char *packet_end = packet + header->caplen;
+	size_t offset = sizeof(ether_header);
+	const ether_header* eth_hdr = reinterpret_cast<const ether_header*>(packet);
+	uint16_t ether_type = ntohs(eth_hdr->ether_type);
+	if (ETHERTYPE_VLAN == ether_type)
+	{
+		offset = sizeof(vlan_ethhdr);
+		const vlan_ethhdr* vlan_hdr = reinterpret_cast<const vlan_ethhdr*>(packet);
+		ether_type = ntohs(vlan_hdr->ether_type);
+	}
 
-    // vlan + ethernet
-    if (packet[12] == 0x81 && packet[13] == 0) {
-        return parse_ip(packet + 4 + sizeof(struct ether_header));
-    }
+	unsigned l4_proto;
 
-    // ethernet
-    return parse_ip(packet + sizeof(struct ether_header));
-}
+	if (ETHERTYPE_IP == ether_type)
+	{
+		const ip* ip_hdr = reinterpret_cast<const ip*>(packet + offset);
+		offset += sizeof(ip);
+		l4_proto = ip_hdr->ip_p;
+	}
+	else if (ETHERTYPE_IPV6 == ether_type)
+	{
+		const ip6_hdr* ip_hdr = reinterpret_cast<const ip6_hdr*>(packet + offset);
+		offset += sizeof(ip6_hdr);
+		l4_proto = ip_hdr->ip6_nxt;
+	}
+	else
+	{
+		return packet_end;
+	}
 
-/// Parses IPv4/6 packet headder.
-inline const unsigned char *PcapReader::parse_ip(const unsigned char *payload) const
-{
-    uint8_t protocol;
-    auto caplen = header->caplen;
+	bool cond = false;
+	do {
+		if (IPPROTO_TCP == l4_proto)
+		{
+			const tcphdr* tcp_hdr = reinterpret_cast<const tcphdr*>(packet + offset);
+			size_t tcp_hdr_size = tcp_hdr->th_off * 4;
+			offset += tcp_hdr_size;
+		}
+		else if (IPPROTO_UDP == l4_proto)
+		{
+			offset += sizeof(udphdr);
+		}
+		else if (IPPROTO_IPIP == l4_proto)
+		{
+			const ip* ip_hdr = reinterpret_cast<const ip*>(packet + offset);
+			offset += sizeof(ip);
+			l4_proto = ip_hdr->ip_p;
+            cond = true;
+		}
+		else if (IPPROTO_ESP == l4_proto)
+		{
+			offset += 8;
+		}
+		else if (IPPROTO_ICMP == l4_proto)
+		{
+			offset += sizeof(icmphdr);
+		}
+		else if (IPPROTO_ICMPV6 == l4_proto)
+		{
+			offset += sizeof(icmp6_hdr);
+		}
+		else if (IPPROTO_FRAGMENT == l4_proto)
+		{
+			const ip6_frag* ip_hdr = reinterpret_cast<const ip6_frag*>(packet + offset);
+			offset += sizeof(ip6_frag);
+			l4_proto = ip_hdr->ip6f_nxt;
+			cond = true;
+		}
+		else if (IPPROTO_IPV6 == l4_proto)
+		{
+			const ip6_hdr* ip_hdr = reinterpret_cast<const ip6_hdr*>(packet + offset);
+			offset += sizeof(ip6_hdr);
+			l4_proto = ip_hdr->ip6_nxt;
+		}
+		else
+		{
+            return packet + header->caplen;
+		}
+	} while (cond);
 
-    // ip
-    if (payload[0] == 0x45) {
-        protocol = ((struct ip*)payload)->ip_p;
-        payload += 4*((struct ip*)payload)->ip_hl;
-    }
-    else if (payload[0] == 0x60) {
-        protocol = ((struct ip6_hdr*)payload)->ip6_ctlun.ip6_un1.ip6_un1_nxt;
-        payload += sizeof(struct ip6_hdr);
-    }
-    else {
-        return packet + caplen;
-    }
-
-    // transport protocol
-    switch (protocol) {
-        case IPPROTO_TCP:
-            int ofset;
-            #if __FAVOR_BSD
-            ofset = 4*((((struct tcphdr*)payload)->th_off));
-            #else
-            ofset = 4*((((struct tcphdr*)payload)->doff));
-            #endif
-            // remove padding
-            if (ofset) {
-                payload += ofset;
-            }
-            else {
-                return packet + caplen;
-            }
-
-            if (*payload == 0)
-                return packet + caplen;
-
-            break;
-
-        case IPPROTO_UDP:
-            payload += sizeof(struct udphdr);
-            break;
-
-        case IPPROTO_ICMPV6:
-            // TODO
-        case IPPROTO_ICMP:
-            if (caplen <= MIN_PACKET) {
-                return packet + caplen;
-            }
-
-            payload += 8;
-            if (*payload == 0x45 || *payload == 0x60) {
-                return parse_ip(payload);
-            }
-            break;
-
-        case IPPROTO_IPIP:
-            return parse_ip(payload);
-            break;
-
-        case IPPROTO_GRE:
-        default:
-            return packet + caplen;
-    }
-
-    return payload;
+	assert(offset <= header->caplen);
+	return packet + offset;
 }
 
 #endif
