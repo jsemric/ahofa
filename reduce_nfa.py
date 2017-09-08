@@ -30,7 +30,16 @@ class NetworkNFA:
         self._final_states = set()
         self._state_map = dict()
         self._state_freq = list()
-        self._state_depth = list()
+
+    def copy(self):
+        out = NetworkNFA()
+        out._transitions = self._transitions.copy()
+        out._initial_state = self._initial_state
+        out._final_states = self._final_states.copy()
+        out._state_map = self._state_map.copy()
+        out._state_freq = self._state_freq.copy()
+
+        return out
 
     @lazyproperty
     def total_freq(self):
@@ -69,7 +78,7 @@ class NetworkNFA:
 
         return self._state_map[state]
 
-    def _add_rule(self, pstate, qstate, symbol, usemap=True):
+    def _add_rule(self, pstate, qstate, symbol,* , usemap=True):
         if usemap:
             pstate = self._add_state(pstate)
             qstate = self._add_state(qstate)
@@ -87,9 +96,10 @@ class NetworkNFA:
         state = self._state_map[state]
         self._state_freq[state] = int(freq)
 
-    def _compute_depth(self):
+    @property
+    def state_depth(self):
         succ = self.succ
-        self._state_depth = [0 for i in range(self.state_count)]
+        sdepth = [0 for i in range(self.state_count)]
         actual = set([self._initial_state])
         empty = set()
         depth = 0
@@ -97,13 +107,14 @@ class NetworkNFA:
             empty = empty.union(actual)
             new = set()
             for q in actual:
-                self._state_depth[q] = depth
+                sdepth[q] = depth
                 new = new.union(succ[q])
             new -= empty
             actual = new
             if not new:
                 break
             depth += 1
+        return sdepth
 
 
     ###########################################################################
@@ -163,8 +174,6 @@ class NetworkNFA:
                     else:
                         raise RuntimeError('invalid syntax: \"' + line + '\"')
 
-        res._compute_depth()
-
         return res
 
 
@@ -186,25 +195,27 @@ class NetworkNFA:
         '''
         TODO Add comment.
         '''
+        out = self.copy()
         tmp = set()
-        succ = self.succ
-        pred = self.pred
-        for s in self.succ[self._initial_state]:
-            if self._has_path_over_alph(self._initial_state,s) and \
-               self._has_path_over_alph(s,s):
+        succ = out.succ
+        pred = out.pred
+        for s in out.succ[out._initial_state]:
+            if out._has_path_over_alph(out._initial_state,s) and \
+               out._has_path_over_alph(s,s):
                 tmp.add(s)
 
         state = tmp.pop()
         # remove states & add transitions
         for s in tmp:
             for p in pred[s]:
-                for key,val in self._transitions[p].items():
+                for key,val in out._transitions[p].items():
                     val.discard(s)
-            for key,val in self._transitions[s].items():
-                for x in val:
-                    self._add_rule(state,x,key,False)
 
-        self = self.remove_unreachable()
+            for key,val in out._transitions[s].items():
+                for x in val:
+                    out._add_rule(state,x,key,usemap=False)
+
+        return out.remove_unreachable()
 
     def add_selfloop(self, state):
         for c in range(256):
@@ -245,7 +256,6 @@ class NetworkNFA:
         out._initial_state = state_map[self._initial_state]
         out._final_states = [state_map[x] for x in self._final_states \
                              if x in state_map]
-        out._compute_depth()
 
         return out
 
@@ -256,8 +266,9 @@ class NetworkNFA:
 
     def reduce(self, error=0, depth=0):
         marked = set()
+        sdepth = self.state_depth
         srt_states = sorted([x for x in range(self.state_count) \
-                            if self._state_depth[x] >= depth], \
+                            if sdepth[x] >= depth], \
                             key=lambda x : self._state_freq[x])
 
         for state in srt_states:
@@ -333,10 +344,11 @@ def main():
 
     a = NetworkNFA.parse_fa_file(args.input)
 
-    a = a.reduce(args.max_error, args.depth)
+#    a = a.reduce(args.max_error, args.depth)
     if args.add_sl:
         a.add_selfloops_to_final_states()
 
+    a = a.remove_same_states()
     if args.output:
         with open(args.output, 'w') as out:
             for line in a.write_fa():
