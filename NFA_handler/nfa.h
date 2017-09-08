@@ -94,6 +94,7 @@ static void print_readable(const unsigned char *payload, unsigned length) {
     printf("\n");
 }
 */
+
 template<typename U>
 inline bool NFA::accept(const U word, unsigned length) const
 {
@@ -107,7 +108,6 @@ inline bool NFA::accept(const U word, unsigned length) const
             if (!trans.empty()) {
                 for (auto k : trans) {
                     if (final_states.find(k) != final_states.end()) {
-//                        print_readable(word, i+1);
                         return true;
                     }
                     tmp.insert(k);
@@ -133,12 +133,6 @@ inline void NFA::compute_packet_frequency(const U word, unsigned length)
             if (!trans.empty()) {
                 for (auto k : trans) {
                     visited_states[k] = true;
-                    /*  assuming that packet cannot leave a final state
-                    if (final_states.find(k) != final_states.end()) {
-                        update_freq();
-                        return;
-                    }
-                    */
                     tmp.insert(k);
                 }
             }
@@ -176,6 +170,7 @@ inline void NFA::update_freq() noexcept
         state_freq[i] += visited_states[i];
         visited_states[i] = false;
     }
+    state_freq[initial_state]++;
 }
 
 #endif
