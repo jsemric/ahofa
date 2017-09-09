@@ -81,20 +81,6 @@ private:
     void update_freq() noexcept;
 };
 
-/*
-static void print_readable(const unsigned char *payload, unsigned length) {
-    for (unsigned i = 0; i < length; i++) {
-        if (isprint(payload[i])) {
-            printf("%c", payload[i]);
-        }
-        else {
-            printf("\\x%.2x", payload[i]);
-        }
-    }
-    printf("\n");
-}
-*/
-
 template<typename U>
 inline bool NFA::accept(const U word, unsigned length) const
 {
@@ -125,7 +111,7 @@ inline void NFA::compute_packet_frequency(const U word, unsigned length)
 {
     std::set<unsigned long> actual{initial_state};
 
-    for (unsigned i = 0; i < length && !actual.empty(); i++) {
+    for (unsigned i = 0; i < length; i++) {
         std::set<unsigned long> tmp;
         for (auto j : actual) {
             assert ((j << shift) + word[j] < transitions.size());
@@ -148,7 +134,7 @@ inline void NFA::compute_frequency(const U word, unsigned length)
 {
     std::set<unsigned long> actual{initial_state};
 
-    for (unsigned i = 0; i < length && !actual.empty(); i++) {
+    for (unsigned i = 0; i < length; i++) {
         std::set<unsigned long> tmp;
         for (auto j : actual) {
             assert ((j << shift) + word[j] < transitions.size());

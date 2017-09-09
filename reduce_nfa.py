@@ -344,11 +344,11 @@ def main():
 
     a = NetworkNFA.parse_fa_file(args.input)
 
-#    a = a.reduce(args.max_error, args.depth)
+    a = a.reduce(args.max_error, args.depth)
     if args.add_sl:
         a.add_selfloops_to_final_states()
 
-    a = a.remove_same_states()
+#    a = a.remove_same_states()
     if args.output:
         with open(args.output, 'w') as out:
             for line in a.write_fa():

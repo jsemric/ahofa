@@ -4,6 +4,7 @@
 #include <boost/program_options.hpp>
 #include <ctype.h>
 #include <stdexcept>
+#include <ctime>
 
 #include "nfa.h"
 #include "pcap_reader.h"
@@ -31,7 +32,6 @@ NFA read_nfa(const std::string &fname) {
 void compute_frequencies(const std::vector<std::string> &pcaps, const std::string &str,
                          bool one_per_packet, std::ostream &out)
 {
-    // TODO copy and parallel run in loop
     NFA nfa = read_nfa(str);
     nfa.compute_depth();
     for (auto &p : pcaps) {
@@ -51,7 +51,6 @@ void compute_frequencies(const std::vector<std::string> &pcaps, const std::strin
                 nfa.compute_frequency(payload, length);
             }, ~0LL);
         }
-        // TODO nfa -> steal freqs
     }
 
     nfa.print(out);
@@ -65,7 +64,7 @@ void compute_accepted(const std::vector<std::string> &pcaps, const std::string &
     NFA nfa = read_nfa(str);
     unsigned long total = 0;
     unsigned long accepted = 0;
-    // TODO copy and parallel run in loop
+
     for (auto &p : pcaps) {
         PcapReader pcap_reader;
         pcap_reader.open(p);
@@ -121,7 +120,7 @@ void compute_error_fast(const std::vector<std::string> &pcaps, const std::string
     unsigned long total = 0;
     unsigned long acc1 = 0;
     unsigned long acc2 = 0;
-    // TODO copy and parallel run in loop
+
     for (auto &p : pcaps) {
         PcapReader pcap_reader;
         pcap_reader.open(p);

@@ -57,6 +57,8 @@ public:
     void omit_packets(unsigned long count);
     template<typename F>
     void process_packets(F func, unsigned long count);
+
+    static void print_readable(const unsigned char *payload, unsigned length);
 };
 
 inline const struct pcap_pkthdr* PcapReader::get_header() const noexcept
@@ -114,8 +116,9 @@ inline const unsigned char *PcapReader::get_payload()
 		return packet_end;
 	}
 
-	bool cond = false;
+    bool cond;
 	do {
+        cond = false;
 		if (IPPROTO_TCP == l4_proto)
 		{
 			const tcphdr* tcp_hdr = reinterpret_cast<const tcphdr*>(packet + offset);

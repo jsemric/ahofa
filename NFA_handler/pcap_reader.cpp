@@ -68,3 +68,15 @@ void PcapReader::omit_packets(unsigned long count)
         // to nothing
     }
 }
+
+void PcapReader::print_readable(const unsigned char *payload, unsigned length) {
+    for (unsigned i = 0; i < length; i++) {
+        if (isprint(payload[i])) {
+            printf("%c", payload[i]);
+        }
+        else {
+            printf("\\x%.2x", payload[i]);
+        }
+    }
+    printf("\n");
+}
