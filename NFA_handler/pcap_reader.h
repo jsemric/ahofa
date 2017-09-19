@@ -167,7 +167,10 @@ inline const unsigned char *PcapReader::get_payload()
 		}
 	} while (cond);
 
-	assert(offset <= header->caplen);
+	if (offset > header->caplen) {
+	    return packet + header->caplen;
+	}
+
 	return packet + offset;
 }
 
