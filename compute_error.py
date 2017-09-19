@@ -24,10 +24,12 @@ def main():
     ap.add_argument('-p','--pcaps',nargs='*', help='input pcap files',
                     metavar='PCAP')
     ap.add_argument('-o','--output',type=str,metavar='FILE',help='output file')
+    ap.add_argument('-w','--nworkers',type=int,help='workers to run in \
+                    parallel', default=2)
     args = ap.parse_args()
 
     cargs = [(args.target, args.aut, x) for x in args.pcaps]
-    with futures.ProcessPoolExecutor() as pool:
+    with futures.ProcessPoolExecutor(args.nworkers) as pool:
         results = pool.map(compute_error, cargs)
 
     total, acc1, acc2 = 0, 0, 0
