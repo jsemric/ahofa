@@ -17,6 +17,8 @@
 #include <stdio.h>
 #include <ctype.h>
 
+using StrVec = std::vector<std::string>;
+
 template <typename T1, typename T2, typename T3>
 struct Triple
 {
@@ -55,6 +57,7 @@ private:
     std::vector<unsigned long> state_freq;
     std::vector<unsigned> state_depth;
     std::vector<bool> visited_states;
+    StrVec state_rmap;
 
     static const unsigned shift = 8;
     static const unsigned alph_size = 256;
@@ -72,9 +75,9 @@ public:
     template<typename U>
     inline void compute_packet_frequency(const U word, unsigned length);
 
-    void print(std::ostream &out = std::cout) const;
-    void print_freq(std::ostream &out = std::cout) const;
-    void read_from_file(std::ifstream &input);
+    void print(std::ostream &out = std::cout, bool usemap = true) const;
+    void print_freq(std::ostream &out = std::cout, bool usemap = true) const;
+    StrVec read_from_file(std::ifstream &input);
     void compute_depth();
 
 private:

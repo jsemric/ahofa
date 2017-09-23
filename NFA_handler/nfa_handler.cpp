@@ -53,8 +53,6 @@ void compute_frequencies(const std::vector<std::string> &pcaps, const std::strin
         }
     }
 
-    nfa.print(out);
-    out << "=====\n";
     nfa.print_freq(out);
 }
 
@@ -136,10 +134,6 @@ void compute_error_fast(const std::vector<std::string> &pcaps, const std::string
     }
 
     out << total << " " << acc1 <<  " " << acc2 << std::endl;
-/*    out << str1 << " <+> " << str2 << "\n";
-    out << "=====\n";
-    out << "Total: " << total << "\n";
-    out << "Error: " << acc2 << "/" << acc1 << " " << 1.0*(acc2 - acc1)/total << "\n";*/
 }
 
 void conflict_options(const po::variables_map &vm, const std::string &opt1,
@@ -154,7 +148,7 @@ void conflict_options(const po::variables_map &vm, const std::string &opt1,
 
 int main(int argc, char **argv) {
 
-    std::string nfa_str1, nfa_str2, out;
+    std::string nfa_str1, nfa_str2, ofname;
     std::vector<std::string> pcaps;
 
     po::options_description desc("Allowed options");
@@ -166,7 +160,7 @@ int main(int argc, char **argv) {
      "an over-approximation of the first NFA set by -t option")
     ("packet-freq,f", "compute a packet frequency of each state NFA")
     ("byte-freq,b", "compute frequencies of bytes instead of packets NFA")
-    ("output,o", po::value(&out)->value_name("FILE"), "output file");
+    ("output,o", po::value(&ofname)->value_name("FILE"), "output file");
 
     po::variables_map varmap;
     try {
@@ -183,9 +177,9 @@ int main(int argc, char **argv) {
 
         std::ostream *output = &std::cout;
         if (varmap.count("output")) {
-            output = new std::ofstream{out};
+            output = new std::ofstream{ofname};
             if (!static_cast<std::ofstream*>(output)->is_open()) {
-                std::cerr << "Error: cannot open output file " << out << "\n";
+                std::cerr << "Error: cannot open output file " << ofname << "\n";
                 return 1;
             }
         }

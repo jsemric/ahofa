@@ -38,7 +38,7 @@ NFA::~NFA()
 
 }
 
-void NFA::read_from_file(std::ifstream &input)
+StrVec NFA::read_from_file(std::ifstream &input)
 {
     bool no_final = true;
     std::string buf, init;
@@ -64,9 +64,11 @@ void NFA::read_from_file(std::ifstream &input)
         state_set.insert(s2);
     }
 
+    state_rmap = StrVec(state_set.size());
     // mapping states
     unsigned long state_count = 0;
     for (auto i : state_set) {
+        state_rmap[state_count] = i;
         state_map[i] = state_count++;
     }
 
@@ -94,10 +96,16 @@ void NFA::read_from_file(std::ifstream &input)
             }
         } while (std::getline(input, buf));
     }
+
+    return state_rmap;
 }
 
-void NFA::print(std::ostream &out) const
+void NFA::print(std::ostream &out, bool usemap) const
 {
+    auto fmap = [this, &usemap](unsigned int x) {
+        return usemap ? this->state_rmap[x] : std::to_string(x);
+    };
+
     out << this->initial_state << "\n";
 
     for (unsigned long i = 0; i <= state_max; i++) {
@@ -105,14 +113,14 @@ void NFA::print(std::ostream &out) const
         for (unsigned j = 0; j < alph_size; j++) {
             if (!transitions[idx + j].empty()) {
                 for (auto k : transitions[idx + j]) {
-                    out << i << " " << k << " " << int_to_hex(j) << "\n";
+                    out << fmap(i) << " " << fmap(k) << " " << int_to_hex(j) << "\n";
                 }
             }
         }
     }
 
     for (auto i : final_states) {
-        out << i << "\n";
+        out << fmap(i) << "\n";
     }
 }
 
@@ -142,9 +150,13 @@ void NFA::compute_depth()
     }
 }
 
-void NFA::print_freq(std::ostream &out) const
+void NFA::print_freq(std::ostream &out, bool usemap) const
 {
+    auto fmap = [this, &usemap](unsigned int x) {
+        return usemap ? this->state_rmap[x] : std::to_string(x);
+    };
+
     for (unsigned long i = 0; i <= state_max; i++) {
-        out << i << " " << state_freq[i] << " " << state_depth[i] << "\n";
+        out << fmap(i) << " " << state_freq[i] << " " << state_depth[i] << "\n";
     }
 }

@@ -1,328 +1,64 @@
 #!/usr/bin/env python3
 
-import re
 from collections import defaultdict
 import os, sys
+import operator
 import argparse
 
-class lazyproperty:
+import nnfa
+import nnfa_parser
 
-    def __init__(self, func):
-        self.func = func
+def create_output_name(aut, pcaps, error, depth):
+    pass
 
-    def __get__(self, instance, cls):
-        if instance is None:
-            return self
+def get_nnfa_freq(fname, state_map):
+    freqs = [0 for x in state_map]
+    with open(fname, 'r') as f:
+        for line in f:
+            state, freq, *_ = line.split()
+            freqs[state_map[state]] = int(freq)
+
+    return freqs
+
+def reduce(aut, freqs, *, error=0, depth=0):
+    total_freq = max(freqs)
+    marked = set()
+    sdepth = aut.state_depth
+    srt_states = sorted([x for x in range(aut.state_count) \
+                        if sdepth[x] >= depth], \
+                        key=lambda x : freqs[x])
+
+    for state in srt_states:
+        sf = freqs[state]
+        err = 0 if sf == 0 else sf / total_freq
+        assert (err >= 0 and err <= 1)
+        if err <= error:
+            marked.add(state)
+            error -= err
         else:
-            value = self.func(instance)
-            setattr(instance, self.func.__name__, value)
-            return value
+            break
 
-class NetworkNFA:
+    final_state_label = aut.state_count
+    new_transitions = [defaultdict(set) for x in range(aut.state_count+1)]
+    for state, rules in enumerate(aut._transitions):
+        for key, val in rules.items():
+            new_transitions[state][key] = \
+            set([x if x not in marked else final_state_label for x in val])
 
-    RE_transition_FA_format = re.compile('^\w+\s+\w+\s+\w+$')
-    RE_state_FA_format = re.compile('^\w+$')
-    RE_state_freq_FA_format = re.compile('^\w+\s+\d+(\s+\d+)?$')
-
-    def __init__(self):
-        self._transitions = list(defaultdict(set))
-        self._initial_state = None
-        self._final_states = set()
-        self._state_map = dict()
-        self._state_freq = list()
-
-    def copy(self):
-        out = NetworkNFA()
-        out._transitions = self._transitions.copy()
-        out._initial_state = self._initial_state
-        out._final_states = self._final_states.copy()
-        out._state_map = self._state_map.copy()
-        out._state_freq = self._state_freq.copy()
-
-        return out
-
-    @lazyproperty
-    def total_freq(self):
-        return max(self._state_freq)
-
-    @property
-    def state_count(self):
-        return len(self._transitions)
-
-    @property
-    def pred(self):
-        pred = [set() for i in range(self.state_count)]
-
-        for state, rules in enumerate(self._transitions):
-            for key, value in rules.items():
-                for q in value:
-                    pred[q].add(state)
-
-        return pred
-
-    @property
-    def succ(self):
-        succ = [set() for i in range(self.state_count)]
-
-        for state, rules in enumerate(self._transitions):
-            for key, value in rules.items():
-                for q in value:
-                    succ[state].add(q)
-
-        return succ
-
-    def _add_state(self, state):
-        if not state in self._state_map:
-            self._state_map[state] = self.state_count
-            self._transitions.append(defaultdict(set))
-
-        return self._state_map[state]
-
-    def _add_rule(self, pstate, qstate, symbol,* , usemap=True):
-        if usemap:
-            pstate = self._add_state(pstate)
-            qstate = self._add_state(qstate)
-            symbol = int(symbol,0)
-        self._transitions[pstate][symbol].add(qstate)
-
-    def _add_initial_state(self, state):
-        state = self._add_state(state)
-        self._initial_state = state
-
-    def _add_final_state(self, fstate):
-        self._final_states.add(self._state_map[fstate])
-
-    def _add_freq(self, state, freq, depth=None):
-        state = self._state_map[state]
-        self._state_freq[state] = int(freq)
-
-    @property
-    def state_depth(self):
-        succ = self.succ
-        sdepth = [0 for i in range(self.state_count)]
-        actual = set([self._initial_state])
-        empty = set()
-        depth = 0
-        while True:
-            empty = empty.union(actual)
-            new = set()
-            for q in actual:
-                sdepth[q] = depth
-                new = new.union(succ[q])
-            new -= empty
-            actual = new
-            if not new:
-                break
-            depth += 1
-        return sdepth
-
-
-    ###########################################################################
-    #   IO functions                                                          #
-    ###########################################################################
-
-    def write_fa(self):
-        yield self._initial_state
-        for state, rules in enumerate(self._transitions):
-            for key, value in rules.items():
-                for q in value:
-                    yield ' '.join((str(state),str(q),hex(key)))
-        yield from self._final_states
-
-    def print_fa(self):
-        for line in self.write_fa():
-            print(line)
-
-    @classmethod
-    def parse_fa_file(cls, fname):
-        res = cls()
-        rules = 0
-        with open(fname, 'r') as f:
-            for line in f:
-                # erase new line at the end of the string
-                if line[-1] == '\n':
-                    line = line[:-1]
-
-                if rules == 0:
-                    # read initial state
-                    if cls.RE_state_FA_format.match(line):
-                        res._add_initial_state(line)
-                        rules = 1
-                    else:
-                        raise RuntimeError('invalid syntax: \"' + line + '\"')
-                elif rules == 1:
-                    # read transitions
-                    if cls.RE_transition_FA_format.match(line):
-                        res._add_rule(*line.split())
-                    elif cls.RE_state_FA_format.match(line):
-                        res._add_final_state(line)
-                        rules = 2
-                    else:
-                        raise RuntimeError('invalid syntax: \"' + line + '\"')
-                elif rules == 2:
-                    # read final states
-                    if cls.RE_state_FA_format.match(line):
-                        res._add_final_state(line)
-                    elif line.startswith('====='):
-                        res._state_freq = [0 for x in range(res.state_count)]
-                        rules = 3
-                    else:
-                        raise RuntimeError('invalid syntax: \"' + line + '\"')
-                else:
-                    if cls.RE_state_freq_FA_format.match(line):
-                        res._add_freq(*line.split())
-                    else:
-                        raise RuntimeError('invalid syntax: \"' + line + '\"')
-
-        return res
-
-
-    ###########################################################################
-    #   Reduction, etc.                                                       #
-    ###########################################################################
-
-    def _has_path_over_alph(self, state1, state2):
-        alph = [1 for x in range(256)]
-        for key,val in self._transitions[state1].items():
-            if state2 in val:
-                alph[key] = 0
-            else:
-                return False
-
-        return not sum(alph)
-
-    def remove_same_states(self):
-        '''
-        TODO Add comment.
-        '''
-        out = self.copy()
-        tmp = set()
-        succ = out.succ
-        pred = out.pred
-        for s in out.succ[out._initial_state]:
-            if out._has_path_over_alph(out._initial_state,s) and \
-               out._has_path_over_alph(s,s):
-                tmp.add(s)
-
-        state = tmp.pop()
-        # remove states & add transitions
-        for s in tmp:
-            for p in pred[s]:
-                for key,val in out._transitions[p].items():
-                    val.discard(s)
-
-            for key,val in out._transitions[s].items():
-                for x in val:
-                    out._add_rule(state,x,key,usemap=False)
-
-        return out.remove_unreachable()
-
-    def add_selfloop(self, state):
-        for c in range(256):
-            self._transitions[state][c] = set([state])
-
-    def add_selfloops_to_final_states(self):
-        for x in self._final_states:
-            self.add_selfloop(x)
-
-    def remove_unreachable(self):
-        succ = self.succ
-        actual = set([self._initial_state])
-        reached = set()
-        while True:
-            reached = reached.union(actual)
-            new = set()
-            for q in actual:
-                new = new.union(succ[q])
-            new -= reached
-            actual = new
-            if not new:
-                break
-
-        state_map = dict()
-        cnt = 0
-        for x in reached:
-            state_map[x] = cnt
-            cnt += 1
-
-        out = NetworkNFA()
-        out._transitions = [defaultdict(set) for x in range(cnt)]
-        for state, rules in enumerate(self._transitions):
-            if state in state_map:
-                for key, val in rules.items():
-                    out._transitions[state_map[state]][key] = set([state_map[x] \
-                    for x in val if x in state_map])
-
-        out._initial_state = state_map[self._initial_state]
-        out._final_states = [state_map[x] for x in self._final_states \
-                             if x in state_map]
-
-        return out
-
-
-    def state_error(self, state):
-        sf = self._state_freq[state]
-        return 0 if sf == 0 else sf / self.total_freq
-
-    def reduce(self, error=0, depth=0):
-        marked = set()
-        sdepth = self.state_depth
-        srt_states = sorted([x for x in range(self.state_count) \
-                            if sdepth[x] >= depth], \
-                            key=lambda x : self._state_freq[x])
-
-        for state in srt_states:
-            err = self.state_error(state)
-            assert (err >= 0 and err <= 1)
-            if err <= error:
-                marked.add(state)
-                error -= err
-            else:
-                break
-
-        final_state_label = self.state_count
-        new_transitions = [defaultdict(set) for x in range(self.state_count+1)]
-        for state, rules in enumerate(self._transitions):
-            for key, val in rules.items():
-                new_transitions[state][key] = \
-                set([x if x not in marked else final_state_label for x in val])
-
-        out = NetworkNFA()
-        out._transitions = new_transitions
-        out._final_states = self._final_states.copy()
-        out._initial_state = self._initial_state
-        out._final_states.add(final_state_label)
-        out = out.remove_unreachable()
-        sys.stderr.write('{}/{}\n'.format(out.state_count,self.state_count))
-
-        return out
-
-    def reduce_by_merge(self):
-
-        pred = self.pred
-        succ = self.succ
-
-        def merge_states(self, state1, state2):
-            """
-            state2 -> state1
-            """
-            nonlocal pred
-            nonlocal succ
-            for p in pred[state2]:
-                for ss in self.transitions[p]:
-                    if state2 in ss:
-                        ss.discard(state2)
-                        ss.add(state1)
-            for s in self.transitions[state2]:
-                tmp = self.transitions[state1]
-                tmp = tmp.union(s)
-            self.transitions[state2].clear()
+    cnt = aut.state_count
+    aut._transitions = new_transitions
+    aut._final_states.add(final_state_label)
+    aut.remove_unreachable()
+    sys.stderr.write('{}/{} {:0.2f}%\n'.format(aut.state_count, cnt,
+    aut.state_count*100/cnt))
 
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i','--input', type=str, metavar='FILE',
+    parser.add_argument('input', type=str, metavar='FILE',
                         help='input file with automaton')
+    parser.add_argument('freqs', type=str, metavar='FILE', help='fill \
+                        nfa with frequencies')
     parser.add_argument('-o','--output', type=str, metavar='FILE',
                         help='output file, if not specified everything is \
                         printed to stdout')
@@ -342,13 +78,29 @@ def main():
         sys.stderr.write('Error: no input specified\n')
         sys.exit(1)
 
-    a = NetworkNFA.parse_fa_file(args.input)
+    if args.freqs is None:
+        sys.stderr.write('Error: no frequency file specified\n')
+        sys.exit(1)
 
-    a = a.reduce(args.max_error, args.depth)
+    par = nnfa_parser.NetworkNfaParser()
+    a = par.parse_fa(args.input)
+    rmap = {val:key for key,val in par._state_map.items()}
+    freqs = get_nnfa_freq(args.freqs, par._state_map)
+    depth = a.state_depth
+
+    # a little check
+    succ = a.succ
+    pred = a.pred
+    for state, _ in enumerate(a._transitions):
+        if len(succ[state]) == 1:
+            for x in succ[state]:
+                if freqs[x] > freqs[state] and len(pred[x]) == 1:
+                    raise RuntimeError('invalid frequencies')
+
+    reduce(a, freqs, error=args.max_error, depth=args.depth)
     if args.add_sl:
-        a.add_selfloops_to_final_states()
+        a.selfloop_to_finals()
 
-#    a = a.remove_same_states()
     if args.output:
         with open(args.output, 'w') as out:
             for line in a.write_fa():
