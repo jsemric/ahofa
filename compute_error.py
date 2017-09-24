@@ -5,6 +5,8 @@ import subprocess
 from concurrent import futures
 import os
 
+import default_output
+
 def compute_error(args):
     aut1, aut2, pcap = args
     prog = ' '.join(['./nfa_handler -t', aut1, '-a', aut2, '-p', pcap])
@@ -40,9 +42,16 @@ def main():
         acc2 += int(a2)
 
     out = 'Total: {}\nAccepted1: {}\nAccepted2: {}\n'.format(total, acc1, acc2)
-    if args.output:
-        with open(args.output, 'w') as f:
-            f.write(out)
+    out += 'Error: {:0.10f}'.format((acc2-acc1)/total)
+    if args.output is None:
+        ofname = default_output.error_fname(args.target, args.aut, *args.pcaps)
+        print('Saving to', ofname)
+    else:
+        ofname = args.output
+
+    with open(ofname, 'w') as f:
+        f.write(out)
+
     print(out, end='')
 
 if __name__ == "__main__":

@@ -7,11 +7,9 @@ import argparse
 
 import nnfa
 import nnfa_parser
+import default_output
 
-def create_output_name(aut, pcaps, error, depth):
-    pass
-
-def get_nnfa_freq(fname, state_map):
+def get_nnfa_freq(fname, state_map=None):
     freqs = [0 for x in state_map]
     with open(fname, 'r') as f:
         for line in f:
@@ -55,7 +53,7 @@ def reduce(aut, freqs, *, error=0, depth=0):
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('input', type=str, metavar='FILE',
+    parser.add_argument('aut', type=str, metavar='FILE',
                         help='input file with automaton')
     parser.add_argument('freqs', type=str, metavar='FILE', help='fill \
                         nfa with frequencies')
@@ -74,16 +72,13 @@ def main():
 
     args = parser.parse_args()
 
-    if args.input is None:
-        sys.stderr.write('Error: no input specified\n')
-        sys.exit(1)
 
     if args.freqs is None:
         sys.stderr.write('Error: no frequency file specified\n')
         sys.exit(1)
 
     par = nnfa_parser.NetworkNfaParser()
-    a = par.parse_fa(args.input)
+    a = par.parse_fa(args.aut)
     rmap = {val:key for key,val in par._state_map.items()}
     freqs = get_nnfa_freq(args.freqs, par._state_map)
     depth = a.state_depth
@@ -102,11 +97,15 @@ def main():
         a.selfloop_to_finals()
 
     if args.output:
-        with open(args.output, 'w') as out:
-            for line in a.write_fa():
-                print(line, file=out)
+        ofname = args.output
     else:
-        a.print_fa()
+        ofname = default_output.reduced_fname(args.aut, args.freqs,
+                                              args.max_error,args.depth)
+        print('Saving to', ofname)
+
+    with open(ofname, 'w') as out:
+        for line in a.write_fa():
+            print(line, file=out)
 
 if __name__ == "__main__":
     main()
