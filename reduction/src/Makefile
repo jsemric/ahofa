@@ -1,5 +1,5 @@
 CXX=g++
-CXXFLAGS=-std=c++11 -Wall -Wextra -pedantic -O3 #-DNDEBUG
+CXXFLAGS=-std=c++17 -Wall -Wextra -pedantic -O3 #-DNDEBUG
 LIBS=-lpcap
 PROG=nfa_error
 

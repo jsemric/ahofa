@@ -38,6 +38,16 @@ NFA::~NFA()
 
 }
 
+StrVec NFA::read_from_file(const char *input) {
+    std::ifstream in{input};
+    if (!in.is_open()) {
+        throw std::runtime_error("error loading NFA");
+    }
+    auto res = read_from_file(in);
+    in.close();
+    return res;
+}
+
 StrVec NFA::read_from_file(std::ifstream &input)
 {
     bool no_final = true;

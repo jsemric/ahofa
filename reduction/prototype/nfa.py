@@ -195,6 +195,11 @@ class Nfa:
                     self._transitions[state][symbol].discard(qstate)
                     self._transitions[state][symbol].add(pstate)
 
+        # check if collapsed state is final one
+        if qstate in self._final_states:
+            self._final_state.discard(qstate)
+            self._final_state.add(pstate)
+
         # remove state
         del self._transitions[qstate]
 

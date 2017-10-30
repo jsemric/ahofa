@@ -78,6 +78,7 @@ public:
     void print(std::ostream &out = std::cout, bool usemap = true) const;
     void print_freq(std::ostream &out = std::cout, bool usemap = true) const;
     StrVec read_from_file(std::ifstream &input);
+    StrVec read_from_file(const char *input);
     void compute_depth();
 
 private:
