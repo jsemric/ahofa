@@ -1,7 +1,7 @@
 CXX=g++
 CXXFLAGS=-std=c++11 -Wall -Wextra -pedantic -O3 #-DNDEBUG
-LIBS=-lpcap -lboost_program_options
-PROG=nfa_handler
+LIBS=-lpcap
+PROG=nfa_error
 
 all: $(PROG)
 
@@ -14,14 +14,11 @@ OBJ_FILES=$(patsubst %.h, %.o, $(SRC_FILES))
 nfa.o: nfa.h nfa.cpp
 	$(CXX) $(CXXFLAGS) -c nfa.cpp -o $@
 
-pcap_reader.o: pcap_reader.h pcap_reader.cpp
-	$(CXX) $(CXXFLAGS) -c pcap_reader.cpp -o $@ -lpcap
+nfa_error.o: nfa_error.cpp pcap_reader.h
+	$(CXX) $(CXXFLAGS) -c nfa_error.cpp -o $@ $(LIBS)
 
-nfa_handler.o: nfa_handler.cpp pcap_reader.o
-	$(CXX) $(CXXFLAGS) -c nfa_handler.cpp -o $@ $(LIBS)
-
-nfa_handler: nfa_handler.o nfa.o pcap_reader.o
-	$(CXX) $(CXXFLAGS) nfa_handler.o nfa.o pcap_reader.o -o $@ $(LIBS)
+nfa_error: nfa_error.o nfa.o pcap_reader.h
+	$(CXX) $(CXXFLAGS) nfa_error.o nfa.o -o $@ $(LIBS)
 
 nodata:
 	rm -f obs* tmp* *.fsm *.fa *.pa *.ba

@@ -28,64 +28,58 @@
 #include <net/ethernet.h>
 
 /// Class PcapReader for reading and processing packets in packet caputure files.
-class PcapReader
+namespace pcapreader
 {
-private:
-    pcap_t *pcap;
-    char err_buf[1024];
-    struct pcap_pkthdr *header;
-    const unsigned char *packet;
 
-    static const std::string logfname;
-    struct vlan_ethhdr {
-        u_int8_t  ether_dhost[ETH_ALEN];  /* destination eth addr */
-        u_int8_t  ether_shost[ETH_ALEN];  /* source ether addr    */
-        u_int16_t h_vlan_proto;
-        u_int16_t h_vlan_TCI;
-        u_int16_t ether_type;
-    } __attribute__ ((__packed__));
+struct vlan_ethhdr {
+    u_int8_t  ether_dhost[ETH_ALEN];  /* destination eth addr */
+    u_int8_t  ether_shost[ETH_ALEN];  /* source ether addr    */
+    u_int16_t h_vlan_proto;
+    u_int16_t h_vlan_TCI;
+    u_int16_t ether_type;
+} __attribute__ ((__packed__));
 
-private:
-    inline const unsigned char *get_payload();
+static inline const unsigned char *get_payload(
+    const unsigned char *packet,
+    const struct pcap_pkthdr *header);
 
-public:
-    PcapReader();
-    PcapReader(const std::string &fname);
-    ~PcapReader();
+template<typename F>
+void process_payload(F func, unsigned long count);
 
-    void open(const std::string &input);
-    inline const struct pcap_pkthdr* get_header() const noexcept;
-    void omit_packets(unsigned long count);
-    template<typename F>
-    void process_packets(F func, unsigned long count);
-
-    static void print_readable(const unsigned char *payload, unsigned length);
-};
-
-inline const struct pcap_pkthdr* PcapReader::get_header() const noexcept
-{
-    return header;
-}
 
 /// Generic function for processing packet payload.
 ///
 /// @tparam F lambda function which manipulates with packet payload
 /// @param count Total number of processed packets, which includes some payload data.
 template<typename F>
-void PcapReader::process_packets(F func, unsigned long count)
+void process_payload(const char* capturefile, F func, unsigned long count)
 {
-    const unsigned char *payload;
+    char err_buf[4096] = "";
+    pcap_t *pcap;
+
+    if (!(pcap = pcap_open_offline(capturefile, err_buf))) {
+        throw std::runtime_error(
+            "cannot open pcap file '" + std::string(capturefile) + "'");
+    }
+
+    struct pcap_pkthdr *header;
+    const unsigned char *packet, *payload;
+
     while (pcap_next_ex(pcap, &header, &packet) == 1 && count) {
-        payload = get_payload();
+        payload = get_payload(packet, header);
         int len = header->caplen - (payload - packet);
         if (len > 0) {
             count--;
             func(payload, len);
         }
     }
+
+    pcap_close(pcap);
 }
 
-inline const unsigned char *PcapReader::get_payload()
+inline const unsigned char *get_payload(
+    const unsigned char *packet,
+    const struct pcap_pkthdr *header)
 {
     const unsigned char *packet_end = packet + header->caplen;
     size_t offset = sizeof(ether_header);
@@ -177,5 +171,18 @@ inline const unsigned char *PcapReader::get_payload()
     return packet + offset;
 }
 
+void print_readable(const unsigned char *payload, unsigned length) {
+    for (unsigned i = 0; i < length; i++) {
+        if (isprint(payload[i])) {
+            printf("%c", payload[i]);
+        }
+        else {
+            printf("\\x%.2x", payload[i]);
+        }
+    }
+    printf("\n");
+}
+
+};  // end of namespace
 
 #endif

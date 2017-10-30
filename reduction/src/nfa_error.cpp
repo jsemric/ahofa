@@ -1,10 +1,10 @@
 #include <iostream>
 #include <exception>
 #include <vector>
-#include <boost/program_options.hpp>
 #include <ctype.h>
 #include <stdexcept>
 #include <ctime>
+#include <getopt.h>
 
 #include "nfa.h"
 #include "pcap_reader.h"
@@ -12,9 +12,7 @@
 const char *helpstr =
 "Usage: ./nfa_handler [OPTIONS]\n"
 "Compute the number of accepted packets by NFA if none of options -a, -f, -b are set.\n";
-
-namespace po = boost::program_options;
-
+/*
 NFA read_nfa(const std::string &fname) {
     NFA nfa;
     std::ifstream input{fname};
@@ -135,14 +133,24 @@ void compute_error_fast(const std::vector<std::string> &pcaps, const std::string
 
     out << total << " " << acc1 <<  " " << acc2 << std::endl;
 }
+*/
 
-void conflict_options(const po::variables_map &vm, const std::string &opt1,
-                      const std::string &opt2)
+void compute_error(
+        const NFA &aut1,
+        const NFA &aut2,
+        const std::vector<std::string> &pcaps)
 {
-    if (vm.count(opt1) && !vm[opt1].defaulted() && vm.count(opt2) && !vm[opt2].defaulted())
-    {
-        throw std::logic_error(std::string("Conflicting options '") + opt1 + "' and '" + opt2
-                               + "'.");
+    for (int i = 0; i < pcaps.size(); i++) {
+        /* divide work */
+        /* lamba for each thread */
+        pcapreader::process_payload(
+            pcaps[i].c_str(),
+            [&] (const unsigned char *payload, unsigned len){
+                ;
+            },
+            ~0ULL);
+        /* wait for process */
+        /* sum up error*/
     }
 }
 
@@ -151,53 +159,41 @@ int main(int argc, char **argv) {
     std::string nfa_str1, nfa_str2, ofname;
     std::vector<std::string> pcaps;
 
-    po::options_description desc("Allowed options");
-    desc.add_options()
-    ("help,h", "show this help and exit")
-    ("pcap,p", po::value(&pcaps)->value_name("PCAP")->required(), "pcap file")
-    ("target,t", po::value(&nfa_str1)->value_name("NFA")->required(), "file with NFA")
-    ("automaton,a", po::value(&nfa_str2)->value_name("NFA"), "file with NFA, which suppose to be "
-     "an over-approximation of the first NFA set by -t option")
-    ("packet-freq,f", "compute a packet frequency of each state NFA")
-    ("byte-freq,b", "compute frequencies of bytes instead of packets NFA")
-    ("output,o", po::value(&ofname)->value_name("FILE"), "output file");
-
-    po::variables_map varmap;
-    try {
-        po::store(po::parse_command_line(argc, argv, desc), varmap);
-        if (argc == 1 || varmap.count("help")) {
-            std::cout << helpstr << std::endl;
-            std::cout << desc << std::endl;
-            return 0;
-        }
-        po::notify(varmap);
-        conflict_options(varmap, "byte-freq", "automaton");
-        conflict_options(varmap, "packet-freq", "automaton");
-        conflict_options(varmap, "packet-freq", "byte-freq");
-
-        std::ostream *output = &std::cout;
-        if (varmap.count("output")) {
-            output = new std::ofstream{ofname};
-            if (!static_cast<std::ofstream*>(output)->is_open()) {
-                std::cerr << "Error: cannot open output file " << ofname << "\n";
+    const char *output;
+    int nworkers;
+    int opt_cnt = 1;
+    int c;
+    while ((c = getopt(argc, argv, "ho:n:")) != -1) {
+        opt_cnt += 2;
+        switch (c) {
+            case 'h':
+                fprintf(stderr, "%s", helpstr);
+                return 0;
+            case 'o':
+                output = optarg;
+                break;
+            case 'n':
+                nworkers = std::stoi(optarg);
+                break;
+            default:
                 return 1;
-            }
+        }
+    }
+
+    try {
+        if (nworkers < 1 || nworkers >= 4/*XXX*/) {
+            throw std::runtime_error("invalid number of cores");
         }
 
-        if (varmap.count("byte-freq") || varmap.count("packet-freq")) {
-            compute_frequencies(pcaps, nfa_str1, varmap.count("packet-freq"), *output);
-        }
-        else if (varmap.count("automaton")) {
-            compute_error_fast(pcaps, nfa_str1, nfa_str2, *output);
-        }
-        else {
-            compute_accepted(pcaps, nfa_str1, *output);
-        }
+        /* check nfa files */
 
-        if (varmap.count("output")) {
-            static_cast<std::ofstream*>(output)->close();
-            delete output;
-        }
+        /* check output file */
+
+        /* start computation */
+
+        /* signal handling */
+
+        /* output */
     }
     catch (std::exception &e) {
         std::cerr << "Error: " << e.what() << std::endl;
