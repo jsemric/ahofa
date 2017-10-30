@@ -6,9 +6,7 @@ import operator
 import argparse
 import random
 
-import nnfa
-import nnfa_parser
-import default_output
+import nfa
 
 def reduce2(aut, *, pct=0, depth=0):
     # result is mapping state->state
@@ -18,8 +16,7 @@ def reduce2(aut, *, pct=0, depth=0):
     states = [x for x in range(aut.state_count) if state_depth[x] > depth]
 
     # create equivalence classes
-    print(int(aut.state_count * pct) - aut.state_count + len(states));
-    equiv_groups_count =int(aut.state_count * pct) - aut.state_count + len(states)
+    equiv_groups_count = int(aut.state_count * pct) - aut.state_count + len(states)
     assert(equiv_groups_count > 1)
     equiv_groups = [set() for x in range(equiv_groups_count)]
 
@@ -27,20 +24,26 @@ def reduce2(aut, *, pct=0, depth=0):
         x = random.randrange(0, equiv_groups_count)
         equiv_groups[x].add(state)
 
+    cnt = 0
     for eq in equiv_groups:
         if len(eq) > 1:
             p = eq.pop()
             res[p] = p
             for q in eq:
                 res[q] = p
+                aut.merge_states(p, q)
+                cnt += 1
+                if cnt % 16 == 15:
+                    sys.stdout.write('#')
+                    sys.stdout.flush()
         elif len(eq) == 1:
             p = eq.pop()
             res[p] = p
-    for key,val in res.items():
-        print(key,'->',val)
+
+    sys.stdout.write('\n')
     return res
 
-def get_nnfa_freq(fname, state_map=None):
+def get_nfa_freq(fname, state_map=None):
     freqs = [0 for x in state_map]
     with open(fname, 'r') as f:
         for line in f:
@@ -96,20 +99,15 @@ def main():
     # reduction arguments
     parser.add_argument('-r','--reduction',type=float, metavar='PCT', default=0.5,
                         help='reduction of states')
-    parser.add_argument('-e','--max-error',type=float, metavar='ERR', default=0,
-                        help='idk')
     parser.add_argument('-d','--depth',type=int, metavar='DEPTH', default=2,
                         help='min depth of pruned state')
-    parser.add_argument('-m','--merge-rate',type=float, metavar='N', default=0,
-                        help='idk')
 
     args = parser.parse_args()
-    par = nnfa_parser.NetworkNfaParser()
-    a = par.parse_fa(args.aut)
+    a = nfa.Nfa.parse_fa(args.aut)
 
     if args.freqs:
         rmap = {val:key for key,val in par._state_map.items()}
-        freqs = get_nnfa_freq(args.freqs, par._state_map)
+        freqs = get_nfa_freq(args.freqs, par._state_map)
         depth = a.state_depth
 
         # a little check
@@ -122,16 +120,9 @@ def main():
                         raise RuntimeError('invalid frequencies')
 
     reduce2(a, pct=args.reduction, depth=args.depth)
-    return
-#    reduce(a, freqs, error=args.max_error, depth=args.depth)
+
     if args.add_sl:
         a.selfloop_to_finals()
-
-#        ofname = args.output
-#    else:
-#        ofname = default_output.reduced_fname(args.aut, args.freqs,
-#                                              args.max_error,args.depth)
-#    print('Saving to', ofname)
 
     if args.output:
         with open(args.output, 'w') as out:

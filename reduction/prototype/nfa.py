@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 
+import re
 from collections import defaultdict
 
-class NetworkNfa:
+class Nfa:
 
     RE_transition_FA_format = re.compile('^\w+\s+\w+\s+\w+$')
     RE_state_FA_format = re.compile('^\w+$')
 
     def __init__(self):
-        self._transitions = list(defaultdict(set))
+        self._transitions = dict(defaultdict(set))
         self._initial_state = None
         self._final_states = set()
 
@@ -22,9 +23,9 @@ class NetworkNfa:
 
     @property
     def pred(self):
-        pred = [set() for i in range(self.state_count)]
+        pred = {s:set() for s in self._transitions}
 
-        for state, rules in enumerate(self._transitions):
+        for state, rules in self._transitions.items():
             for key, value in rules.items():
                 for q in value:
                     pred[q].add(state)
@@ -33,9 +34,9 @@ class NetworkNfa:
 
     @property
     def succ(self):
-        succ = [set() for i in range(self.state_count)]
+        succ = {s:set() for s in self._transitions}
 
-        for state, rules in enumerate(self._transitions):
+        for state, rules in self._transitions.items():
             for key, value in rules.items():
                 for q in value:
                     succ[state].add(q)
@@ -63,52 +64,42 @@ class NetworkNfa:
         return sdepth
 
     ###########################################################################
-    # NFA MANIPULATION
+    # NFA SETTER METHODS
     ###########################################################################
 
-    def _add_state(self):
-        self._transitions.append(defaultdict(set))
-        return self.state_count
+    def _add_state(self,state):
+        if not state in self._transitions:
+            self._transitions[state] = (defaultdict(set))
 
     def _add_rule(self, pstate, qstate, symbol):
-        if 0 <= symbol <= 255 and pstate < self.state_count and \
-        qstate < self.state_count:
+        self._add_state(pstate)
+        self._add_state(qstate)
+        if 0 <= symbol <= 255:
             self._transitions[pstate][symbol].add(qstate)
         else:
             raise RuntimeError('Invalid rule format')
 
-    def _add_initial_state(self, state):
-        if state < self.state_count:
-            self._initial_state = state
-        else:
-            raise RuntimeError('Invalid rule format')
+    def _add_initial_state(self, istate):
+        self._add_state(istate)
+        self._initial_state = istate
 
-    def _add_final_state(self, state):
-        if state < self.state_count:
-            self._final_states.add(state)
-        else:
-            raise RuntimeError('Invalid final state')
+    def _add_final_state(self, fstate):
+        self._add_state(fstate)
+        self._final_states.add(fstate)
 
     def _build(self, init, transitions, finals):
+        # !!! XXX unsafe
         self._initial_state = init
         self._final_states = finals
         self._transitions = transitions
 
-    def write_fa(self):
-        yield self._initial_state
-        for state, rules in enumerate(self._transitions):
-            for key, value in rules.items():
-                for q in value:
-                    yield ' '.join((str(state),str(q),hex(key)))
-        yield from self._final_states
-
-    def print_fa(self):
-        for line in self.write_fa():
-            print(line)
+    ###########################################################################
+    # NFA SETTER METHODS
+    ###########################################################################
 
     def _has_path_over_alph(self, state1, state2):
         alph = [1 for x in range(256)]
-        for key,val in self._transitions[state1].items():
+        for key, val in self._transitions[state1].items():
             if state2 in val:
                 alph[key] = 0
             else:
@@ -142,6 +133,10 @@ class NetworkNfa:
 
         return self.remove_unreachable()
 
+    ###########################################################################
+    # AUXILIARY
+    ###########################################################################
+
     def add_selfloop(self, state):
         for c in range(256):
             self._transitions[state][c] = set([state])
@@ -149,6 +144,10 @@ class NetworkNfa:
     def selfloop_to_finals(self):
         for x in self._final_states:
             self.add_selfloop(x)
+
+    ###########################################################################
+    # NFA OPERATIONS
+    ###########################################################################
 
     def remove_unreachable(self):
         succ = self.succ
@@ -171,7 +170,7 @@ class NetworkNfa:
             cnt += 1
 
         transitions = [defaultdict(set) for x in range(cnt)]
-        for state, rules in enumerate(self._transitions):
+        for state, rules in self._transitions.items():
             if state in state_map:
                 for key, val in rules.items():
                     transitions[state_map[state]][key] = set([state_map[x] \
@@ -181,6 +180,23 @@ class NetworkNfa:
         final_states = [state_map[x] for x in self._final_states \
                          if x in state_map]
         self._build(initial_state, transitions, final_states)
+
+    def merge_states(self, pstate, qstate):
+        # redirect all rules with qstate on left side to pstate
+        for symbol, states in self._transitions[qstate].items():
+            for s in states:
+                self._transitions[pstate][symbol].add(s)
+
+        # redirect all rules with qstate on right side to pstate
+        pred = self.pred[qstate]
+        for state in pred:
+            for symbol, states in self._transitions[state].items():
+                if qstate in states:
+                    self._transitions[state][symbol].discard(qstate)
+                    self._transitions[state][symbol].add(pstate)
+
+        # remove state
+        del self._transitions[qstate]
 
     def forward_language_equivalence(self, state1, state2, n):
 
@@ -222,6 +238,7 @@ class NetworkNfa:
 
     @classmethod
     def parse_fa(cls, fname):
+        out = Nfa()
         rules = 0
         with open(fname, 'r') as f:
             for line in f:
@@ -232,26 +249,39 @@ class NetworkNfa:
                 if rules == 0:
                     # read initial state
                     if cls.RE_state_FA_format.match(line):
-                        self._add_initial_state(line)
+                        out._add_initial_state(int(line))
                         rules = 1
                     else:
                         raise RuntimeError('invalid syntax: \"' + line + '\"')
                 elif rules == 1:
                     # read transitions
                     if cls.RE_transition_FA_format.match(line):
-                        self._add_rule(*line.split())
+                        p, q, a = line.split()
+                        p = int(p)
+                        q = int(q)
+                        a = int(a,0)
+                        out._add_rule(p,q,a)
                     elif cls.RE_state_FA_format.match(line):
-                        self._add_final_state(line)
+                        out._add_final_state(int(line))
                         rules = 2
                     else:
                         raise RuntimeError('invalid syntax: \"' + line + '\"')
                 else:
-                    if NetworkNfaParser.RE_state_FA_format.match(line):
-                        self._add_final_state(line)
+                    if cls.RE_state_FA_format.match(line):
+                        out._add_final_state(int(line))
                     else:
                         raise RuntimeError('invalid syntax: \"' + line + '\"')
 
-        out = nnfa.NetworkNfa()
-        out._build(self._initial_state, self._transitions, self._final_states)
-
         return out
+
+    def write_fa(self):
+        yield self._initial_state
+        for state, rules in self._transitions.items():
+            for key, value in rules.items():
+                for q in value:
+                    yield ' '.join((str(state),str(q),hex(key)))
+        yield from self._final_states
+
+    def print_fa(self):
+        for line in self.write_fa():
+            print(line)
