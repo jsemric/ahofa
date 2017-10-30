@@ -4,10 +4,17 @@ from collections import defaultdict
 
 class NetworkNfa:
 
+    RE_transition_FA_format = re.compile('^\w+\s+\w+\s+\w+$')
+    RE_state_FA_format = re.compile('^\w+$')
+
     def __init__(self):
         self._transitions = list(defaultdict(set))
         self._initial_state = None
         self._final_states = set()
+
+    ###########################################################################
+    # PROPERTIES
+    ###########################################################################
 
     @property
     def state_count(self):
@@ -54,6 +61,10 @@ class NetworkNfa:
                 break
             depth += 1
         return sdepth
+
+    ###########################################################################
+    # NFA MANIPULATION
+    ###########################################################################
 
     def _add_state(self):
         self._transitions.append(defaultdict(set))
@@ -170,3 +181,77 @@ class NetworkNfa:
         final_states = [state_map[x] for x in self._final_states \
                          if x in state_map]
         self._build(initial_state, transitions, final_states)
+
+    def forward_language_equivalence(self, state1, state2, n):
+
+        if n == 0:
+            return True
+
+        # same symbols
+        if len(self._transitions[state1]) != len(self._transitions[state2]):
+            return False
+
+        for symbol, states in self._transitions[state1]:
+            if symbol in self._transitions[state2]:
+                for p1 in states:
+                    ret = False
+                    for p2 in self._transitions[state2][symbol]:
+                        if forward_language_equivavelnce(p1, p2, n - 1):
+                            ret = True
+                            break
+                    if ret == False:
+                        return False
+            else:
+                return False
+
+        return True
+
+    def forward_language_equivalence_groups(self, n):
+        eq_groups = {}
+        for p1 in range(self.state_count):
+            eq_groups[p1] = set([p1])
+            for p2 in range(p1, self.state_count):
+                if (forward_language_equivalence(self, p1, p2, n)):
+                    eq_groups[p1].add(p2)
+
+        return eq_groups
+
+    ###########################################################################
+    # IO METHODS
+    ###########################################################################
+
+    @classmethod
+    def parse_fa(cls, fname):
+        rules = 0
+        with open(fname, 'r') as f:
+            for line in f:
+                # erase new line at the end of the string
+                if line[-1] == '\n':
+                    line = line[:-1]
+
+                if rules == 0:
+                    # read initial state
+                    if cls.RE_state_FA_format.match(line):
+                        self._add_initial_state(line)
+                        rules = 1
+                    else:
+                        raise RuntimeError('invalid syntax: \"' + line + '\"')
+                elif rules == 1:
+                    # read transitions
+                    if cls.RE_transition_FA_format.match(line):
+                        self._add_rule(*line.split())
+                    elif cls.RE_state_FA_format.match(line):
+                        self._add_final_state(line)
+                        rules = 2
+                    else:
+                        raise RuntimeError('invalid syntax: \"' + line + '\"')
+                else:
+                    if NetworkNfaParser.RE_state_FA_format.match(line):
+                        self._add_final_state(line)
+                    else:
+                        raise RuntimeError('invalid syntax: \"' + line + '\"')
+
+        out = nnfa.NetworkNfa()
+        out._build(self._initial_state, self._transitions, self._final_states)
+
+        return out
