@@ -44,7 +44,10 @@ static inline const unsigned char *get_payload(
     const struct pcap_pkthdr *header);
 
 template<typename F>
-void process_payload(F func, unsigned long count);
+void process_payload(
+        const char* capturefile,
+        F func,
+        unsigned long count = ~0UL);
 
 
 /// Generic function for processing packet payload.
@@ -52,7 +55,10 @@ void process_payload(F func, unsigned long count);
 /// @tparam F lambda function which manipulates with packet payload
 /// @param count Total number of processed packets, which includes some payload data.
 template<typename F>
-void process_payload(const char* capturefile, F func, unsigned long count)
+void process_payload(
+        const char* capturefile,
+        F func,
+        unsigned long count)
 {
     char err_buf[4096] = "";
     pcap_t *pcap;
@@ -183,6 +189,6 @@ void print_readable(const unsigned char *payload, unsigned length) {
     printf("\n");
 }
 
-};  // end of namespace
+}  // end of namespace
 
 #endif

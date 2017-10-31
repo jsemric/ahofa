@@ -14,6 +14,7 @@
 #include <map>
 #include <set>
 #include <exception>
+#include <cassert>
 #include <stdio.h>
 #include <ctype.h>
 
