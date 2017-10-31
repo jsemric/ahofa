@@ -94,7 +94,20 @@ class Nfa:
         self._transitions = transitions
 
     ###########################################################################
-    # NFA SETTER METHODS
+    # AUXILIARY
+    ###########################################################################
+
+    def add_selfloop(self, state):
+        for c in range(256):
+            self._transitions[state][c] = set([state])
+
+    def selfloop_to_finals(self):
+        for x in self._final_states:
+            self.add_selfloop(x)
+
+
+    ###########################################################################
+    # NFA MANUPULATION
     ###########################################################################
 
     def _has_path_over_alph(self, state1, state2):
@@ -133,17 +146,9 @@ class Nfa:
 
         return self.remove_unreachable()
 
-    ###########################################################################
-    # AUXILIARY
-    ###########################################################################
-
-    def add_selfloop(self, state):
-        for c in range(256):
-            self._transitions[state][c] = set([state])
-
-    def selfloop_to_finals(self):
-        for x in self._final_states:
-            self.add_selfloop(x)
+    def clear_final_state_transitions(self):
+        for fstate in self._final_states:
+            self._transitions[fstate] = (defaultdict(set))
 
     ###########################################################################
     # NFA OPERATIONS
@@ -163,23 +168,14 @@ class Nfa:
             if not new:
                 break
 
-        state_map = dict()
-        cnt = 0
-        for x in reached:
-            state_map[x] = cnt
-            cnt += 1
+        for state, rules in self._transitions.copy().items():
+            if not state in reached:
+                del self._transitions[state]
+            else:
+                for symbol, states in rules.items():
+                    self._transitions[state][symbol] = states & reached
 
-        transitions = [defaultdict(set) for x in range(cnt)]
-        for state, rules in self._transitions.items():
-            if state in state_map:
-                for key, val in rules.items():
-                    transitions[state_map[state]][key] = set([state_map[x] \
-                    for x in val if x in state_map])
-
-        initial_state = state_map[self._initial_state]
-        final_states = [state_map[x] for x in self._final_states \
-                         if x in state_map]
-        self._build(initial_state, transitions, final_states)
+        self._final_states &= reached
 
     def merge_states(self, pstate, qstate):
         # redirect all rules with qstate on left side to pstate
@@ -197,8 +193,8 @@ class Nfa:
 
         # check if collapsed state is final one
         if qstate in self._final_states:
-            self._final_state.discard(qstate)
-            self._final_state.add(pstate)
+            self._final_states.discard(qstate)
+            self._final_states.add(pstate)
 
         # remove state
         del self._transitions[qstate]

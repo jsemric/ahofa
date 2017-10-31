@@ -41,15 +41,20 @@ std::mutex mux;
 unsigned total_packets = 0;
 unsigned accepted_target = 0;
 unsigned accepted_reduced = 0;
+unsigned wrongly_classified = 0;
 // time statistics
 std::chrono::steady_clock::time_point timepoint;
 
 // gather results
-void sum_up(unsigned total, unsigned acc_target, unsigned acc_reduced = 0) {
+void sum_up(
+    unsigned total, unsigned acc_target,
+    unsigned acc_reduced = 0, unsigned different = 0)
+{
     mux.lock();
     total_packets += total;
     accepted_target += acc_target;
     accepted_reduced += acc_reduced;
+    wrongly_classified += different;
     mux.unlock();
 }
 
@@ -69,8 +74,7 @@ void compute_accepted(const NFA &nfa, const std::vector<std::string> &pcaps)
             // just checking how many packets are accepted
             pcapreader::process_payload(
                 pcaps[i].c_str(),
-                [&nfa, &total, &accepted]
-                (const unsigned char *payload, unsigned len)
+                [&] (const unsigned char *payload, unsigned len)
                 {
                     if (continue_work == false) {
                         // SIGINT caught in parent, sum up and exit
@@ -95,12 +99,12 @@ void compute_accepted(const NFA &nfa, const std::vector<std::string> &pcaps)
 }
 
 void compute_error(
-        const NFA &target,
-        const NFA &reduced,
-        const std::vector<std::string> &pcaps,
-        bool fast = true)
+    const NFA &target,
+    const NFA &reduced,
+    const std::vector<std::string> &pcaps,
+    bool fast = true)
 {
-    unsigned total = 0, acc_target = 0, acc_reduced = 0;
+    unsigned total = 0, acc_target = 0, acc_reduced = 0, different = 0;
     unsigned i = 0;
     START2:
     try {
@@ -111,8 +115,7 @@ void compute_error(
                 // reduced supposes to be an over-approximation
                 pcapreader::process_payload(
                     pcaps[i].c_str(),
-                    [&target, &reduced, &total, &acc_target, &acc_reduced]
-                    (const unsigned char *payload, unsigned len)
+                    [&] (const unsigned char *payload, unsigned len)
                     {
                         if (continue_work == false) {
                             // SIGINT caught in parent, sum up and exit
@@ -121,15 +124,19 @@ void compute_error(
                         total++;
                         if (reduced.accept(payload, len)) {
                             acc_reduced++;
-                            acc_target += target.accept(payload, len);
+                            if (target.accept(payload, len)) {
+                                acc_target++;
+                            }
+                            else {
+                                different++;
+                            }
                         }
                     });
             }
             else {
                 pcapreader::process_payload(
                     pcaps[i].c_str(),
-                    [&target, &reduced, &total, &acc_target, &acc_reduced]
-                    (const unsigned char *payload, unsigned len)
+                    [&] (const unsigned char *payload, unsigned len)
                     {
                         if (continue_work == false) {
                             // SIGINT caught in parent, sum up and exit
@@ -140,6 +147,7 @@ void compute_error(
                         bool b2 = target.accept(payload, len);
                         acc_reduced += b1;
                         acc_target += b2;
+                        different += b1 != b2;
                     });
             }
         }
@@ -154,7 +162,7 @@ void compute_error(
         ;
     }
     // sum up results
-    sum_up(total, acc_target, acc_reduced);
+    sum_up(total, acc_target, acc_reduced, different);
 }
 
 void write_output(std::ostream &out) {
@@ -165,7 +173,6 @@ void write_output(std::ostream &out) {
         out << "Accepted            : " << accepted_target << "\n";
     }
     else {
-        unsigned wrongly_classified = (accepted_reduced - accepted_target);
         float err = wrongly_classified * 1.0 / total_packets;
         out << "Accepted by target  : " << accepted_target << "\n";
         out << "Accepted by reduced : " << accepted_reduced << "\n";

@@ -40,6 +40,8 @@ def reduce2(aut, *, pct=0, depth=0):
             p = eq.pop()
             res[p] = p
 
+    aut.clear_final_state_transitions()
+    aut.remove_unreachable()
     sys.stdout.write('\n')
     return res
 
