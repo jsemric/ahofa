@@ -22,6 +22,10 @@ class Nfa:
         return len(self._transitions)
 
     @property
+    def states(self):
+        yield from self._transitions.keys()
+
+    @property
     def pred(self):
         pred = {s:set() for s in self._transitions}
 
@@ -46,7 +50,7 @@ class Nfa:
     @property
     def state_depth(self):
         succ = self.succ
-        sdepth = [0 for i in range(self.state_count)]
+        sdepth = {state:0 for state in self.states}
         actual = set([self._initial_state])
         empty = set()
         depth = 0
@@ -110,6 +114,26 @@ class Nfa:
     # NFA MANUPULATION
     ###########################################################################
 
+    def remove_states(self, state_set):
+        assert(not self._initial_state in state_set)
+        for state, rules in self._transitions.copy().items():
+            if state in state_set:
+                del self._transitions[state]
+            else:
+                for symbol, states in rules.items():
+                    self._transitions[state][symbol] = states - state_set
+
+        self._final_states -= state_set
+
+    def set_edges_final(self):
+        # TODO
+        final_state_label = max(self.states) + 1
+        self._final_states.add(final_state_label)
+
+        for state in self.states:
+            if not self._transitions[state]:
+                self.merge_states(state, final_state_label)
+
     def _has_path_over_alph(self, state1, state2):
         alph = [1 for x in range(256)]
         for key, val in self._transitions[state1].items():
@@ -168,14 +192,8 @@ class Nfa:
             if not new:
                 break
 
-        for state, rules in self._transitions.copy().items():
-            if not state in reached:
-                del self._transitions[state]
-            else:
-                for symbol, states in rules.items():
-                    self._transitions[state][symbol] = states & reached
+        self.remove_states(set([s for x in self.states if x not in reached]))
 
-        self._final_states &= reached
 
     def merge_states(self, pstate, qstate):
         # redirect all rules with qstate on left side to pstate
@@ -286,3 +304,7 @@ class Nfa:
     def print_fa(self):
         for line in self.write_fa():
             print(line)
+
+    def to_dot(self):
+        pass
+        # TODO
