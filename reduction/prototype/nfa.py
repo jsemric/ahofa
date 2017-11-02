@@ -91,28 +91,15 @@ class Nfa:
         self._add_state(fstate)
         self._final_states.add(fstate)
 
-    def _build(self, init, transitions, finals):
-        # !!! XXX unsafe
-        self._initial_state = init
-        self._final_states = finals
-        self._transitions = transitions
-
-    ###########################################################################
-    # AUXILIARY
-    ###########################################################################
-
-    def add_selfloop(self, state):
-        for c in range(256):
-            self._transitions[state][c] = set([state])
-
-    def selfloop_to_finals(self):
-        for x in self._final_states:
-            self.add_selfloop(x)
-
-
     ###########################################################################
     # NFA MANUPULATION
     ###########################################################################
+
+    def selfloop_to_finals(self):
+        for state in self._final_states:
+            for c in range(256):
+                self._transitions[state][c] = set([state])
+
 
     def remove_states(self, state_set):
         assert(not self._initial_state in state_set)
@@ -124,15 +111,6 @@ class Nfa:
                     self._transitions[state][symbol] = states - state_set
 
         self._final_states -= state_set
-
-    def set_edges_final(self):
-        # TODO
-        final_state_label = max(self.states) + 1
-        self._final_states.add(final_state_label)
-
-        for state in self.states:
-            if not self._transitions[state]:
-                self.merge_states(state, final_state_label)
 
     def _has_path_over_alph(self, state1, state2):
         alph = [1 for x in range(256)]
@@ -174,10 +152,6 @@ class Nfa:
         for fstate in self._final_states:
             self._transitions[fstate] = (defaultdict(set))
 
-    ###########################################################################
-    # NFA OPERATIONS
-    ###########################################################################
-
     def remove_unreachable(self):
         succ = self.succ
         actual = set([self._initial_state])
@@ -192,10 +166,21 @@ class Nfa:
             if not new:
                 break
 
-        self.remove_states(set([s for x in self.states if x not in reached]))
+        self.remove_states(set([s for s in self.states if s not in reached]))
+
+    def prune(self, to_prune):
+        final_state_label = max(self.states) + 1
+        self._add_final_state(final_state_label)
+
+        for state in to_prune:
+            self.merge_states(final_state_label, state)
+
+        self.clear_final_state_transitions()
 
 
     def merge_states(self, pstate, qstate):
+        if pstate == qstate:
+            return
         # redirect all rules with qstate on left side to pstate
         for symbol, states in self._transitions[qstate].items():
             for s in states:
@@ -216,6 +201,12 @@ class Nfa:
 
         # remove state
         del self._transitions[qstate]
+
+
+
+    ###########################################################################
+    # LANGUAGE OPERATIONS
+    ###########################################################################
 
     def forward_language_equivalence(self, state1, state2, n):
 

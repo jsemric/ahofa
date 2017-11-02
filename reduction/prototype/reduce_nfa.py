@@ -20,7 +20,7 @@ def show_progress():
         sys.stdout.write('\n')
         sys.stdout.flush()
 
-def merge_random(aut, *, pct=0, prefix=0, suffix=0):
+def merge_random(aut, pct=0, prefix=0, suffix=0):
     # result is mapping state->state
     res = {}
     # set of states which will be collapsed
@@ -31,9 +31,10 @@ def merge_random(aut, *, pct=0, prefix=0, suffix=0):
         if state_depth[state] > prefix and state_depth[state] < max_depth ]
 
     # create equivalence classes
-    equiv_groups_count = int(aut.state_count * pct) - aut.state_count + \
-    len(states)
-#    assert(equiv_groups_count > 1)
+    equiv_groups_count = int(aut.state_count * pct) - (aut.state_count - \
+    len(states))
+    print(equiv_groups_count, pct, aut.state_count, len(states))
+    assert(equiv_groups_count > 1)
     if not equiv_groups_count > 1:
         return
     equiv_groups = [set() for x in range(equiv_groups_count)]
@@ -42,7 +43,6 @@ def merge_random(aut, *, pct=0, prefix=0, suffix=0):
         x = random.randrange(0, equiv_groups_count)
         equiv_groups[x].add(state)
 
-    print(equiv_groups)
     for eq in equiv_groups:
         if len(eq) > 1:
             p = eq.pop()
@@ -61,13 +61,13 @@ def merge_random(aut, *, pct=0, prefix=0, suffix=0):
     return res
 
 def get_nfa_freq(fname):
-    freqs = {}
+    freq = {}
     with open(fname, 'r') as f:
         for line in f:
-            state, freq, *_ = line.split()
-            freqs[state] = int(freq)
+            state, fr, *_ = line.split()
+            freq[int(state)] = int(fr)
 
-    return freqs
+    return freq
 
 def check_freq(aut, freq):
     # TODO
@@ -78,28 +78,30 @@ def check_freq(aut, freq):
     for state in aut.states:
         if len(succ[state]) == 1:
             for x in succ[state]:
-                if freqs[x] > freqs[state] and len(pred[x]) == 1:
+                if freq[x] > freq[state] and len(pred[x]) == 1:
                     raise RuntimeError('invalid frequencies')
 
-def prune_freq(aut, freqs, *, error=0):
+def prune_freq(aut, freq, pct=0):
     # TODO
-    total_freq = max(freqs)
     marked = set()
-    sdepth = aut.state_depth
-    srt_states = sorted([x for x in range(aut.state_count) \
-                        if sdepth[x] >= depth], \
-                        key=lambda x : freqs[x])
+    previous_state_count = aut.state_count
+    if pct == 0:
+        marked = set([s for s in aut.states if freq[s] == 0])
+    else:
+        # states sorted according to its frequency
+        srt_states = sorted(list(aut.states), key=lambda x : freq[x])
+        # number of removed states
+        cnt = aut.state_count - int(aut.state_count * pct)
+        for state in srt_states:
+            if cnt:
+                cnt -= 1
+                marked.add(state)
+            else:
+                break
 
-    for state in srt_states:
-        sf = freqs[state]
-        err = 0 if sf == 0 else sf / total_freq
-        assert (err >= 0 and err <= 1)
-        if err <= error:
-            marked.add(state)
-            error -= err
-        else:
-            break
-
+    aut.prune(marked)
+    state_count = aut.state_count
+    '''
     final_state_label = aut.state_count
     new_transitions = [defaultdict(set) for x in range(aut.state_count+1)]
     for state, rules in enumerate(aut._transitions):
@@ -111,18 +113,25 @@ def prune_freq(aut, freqs, *, error=0):
     aut._transitions = new_transitions
     aut._final_states.add(final_state_label)
     aut.remove_unreachable()
-    sys.stderr.write('{}/{} {:0.2f}%\n'.format(aut.state_count, cnt,
-    aut.state_count*100/cnt))
+    '''
+    sys.stderr.write(
+        '{}/{} {:0.2f}%\n'.format(
+            state_count, previous_state_count,
+            state_count * 100 / previous_state_count))
 
-def prune_bfs(aut, depth):
-    # TODO
+def prune_bfs(aut, depth, ratio=0):
+    previous_state_count = aut.state_count
     state_depth = aut.state_depth
-    aut.remove_states(
+    aut.prune(
         set([
             state for state in aut.states if state_depth[state] > depth
             ]))
-    aut.set_edges_final()
-    aut.remove_unreachable()
+
+    state_count = aut.state_count
+    sys.stderr.write(
+        '{}/{} {:0.2f}%\n'.format(
+            state_count, previous_state_count,
+            state_count * 100 / previous_state_count))
 
 def prune_random(aut, pct):
     # TODO
@@ -166,7 +175,7 @@ def main():
         parents = [general_parser])
     prune_mxgroup = prune_parser.add_mutually_exclusive_group()
     prune_mxgroup.add_argument(
-        '--freqs', type=str, metavar='FILE',
+        '--freq', type=str, metavar='FILE',
         help='reduce NFA according to frequencies')
     prune_mxgroup.add_argument(
         '--random', action='store_true', help='prune randomly')
@@ -191,17 +200,16 @@ def main():
 
     # reduce
     if args.command == 'prune':
-        if args.freqs:
-            freqs = get_nfa_freq(args.freqs, par._state_map)
-            check_frequencies(a, freqs)
-            prune_freq(aut, freqs)
+        if args.freq:
+            freq = get_nfa_freq(args.freq)
+            check_freq(aut, freq)
+            prune_freq(aut, freq, args.reduction)
         elif args.bfs:
             prune_bfs(aut, args.bfs)
         elif args.random:
             prune_random(aut, args.reduction)
     elif args.command == 'merge':
-        merge_random(
-            aut, pct=args.reduction, prefix=args.prefix, suffix=args.suffix)
+        merge_random(aut, args.reduction, args.prefix, args.suffix)
 
     if args.add_sl:
         aut.selfloop_to_finals()
@@ -212,7 +220,7 @@ def main():
             for line in aut.write_fa():
                 print(line, file=out)
     else:
-        for line in a.write_fa():
+        for line in aut.write_fa():
             print(line)
 
 if __name__ == "__main__":
