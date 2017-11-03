@@ -122,29 +122,32 @@ class Nfa:
 
         return not sum(alph)
 
-    def remove_same_states(self):
+    def lightweight_minimization(self):
         '''
         TODO Add comment.
         '''
-        tmp = set()
+        to_remove = set()
         succ = self.succ
         pred = self.pred
         for s in self.succ[self._initial_state]:
-            if self._has_path_over_alph(self._initial_state,s) and \
-               self._has_path_over_alph(s,s):
-                tmp.add(s)
+            if self._has_path_over_alph(self._initial_state, s) and \
+               self._has_path_over_alph(s, s):
+                to_remove.add(s)
 
-        if tmp:
-            state = tmp.pop()
+        if to_remove:
+            state = to_remove.pop()
         # remove states & add transitions
-        for s in tmp:
+        for s in to_remove:
             for p in pred[s]:
-                for key,val in self._transitions[p].items():
+                for key, val in self._transitions[p].items():
                     val.discard(s)
 
-            for key,val in self._transitions[s].items():
+            for key, val in self._transitions[s].items():
                 for x in val:
-                    self._add_rule(state,x,key)
+                    self._add_rule(state, x, key)
+
+        # merge all final states to one
+        self.prune(self._final_states.copy())
 
         return self.remove_unreachable()
 
@@ -297,5 +300,19 @@ class Nfa:
             print(line)
 
     def to_dot(self):
-        pass
-        # TODO
+        yield 'digraph NFA {\n \
+        rankdir=LR;size="8,5"\n \
+        graph [ dpi = 400 ]\n \
+        node [shape = doublecircle];'
+        yield ';'.join(['q' + str(qf) for qf in self._final_states]) + '\n'
+
+        yield 'node [shape = point]; qi\n \
+        node [shape = circle];\n'
+        yield 'qi -> q' + str(self._initial_state) + ';\n'
+
+        succ = self.succ
+        for state in self.states:
+            for s in succ[state]:
+                yield ' '.join(('q' + str(state), '->', 'q' + str(s), ';\n'))
+
+        yield '}\n'

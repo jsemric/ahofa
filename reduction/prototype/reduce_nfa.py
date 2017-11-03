@@ -25,6 +25,7 @@ def merge_random(aut, pct=0, prefix=0, suffix=0):
     res = {}
     # set of states which will be collapsed
     state_depth = aut.state_depth
+    # FIXME not max depth
     max_depth = max(state_depth.values()) - suffix
     states = [
         state for state in aut.states
@@ -101,19 +102,6 @@ def prune_freq(aut, freq, pct=0):
 
     aut.prune(marked)
     state_count = aut.state_count
-    '''
-    final_state_label = aut.state_count
-    new_transitions = [defaultdict(set) for x in range(aut.state_count+1)]
-    for state, rules in enumerate(aut._transitions):
-        for key, val in rules.items():
-            new_transitions[state][key] = \
-            set([x if x not in marked else final_state_label for x in val])
-
-    cnt = aut.state_count
-    aut._transitions = new_transitions
-    aut._final_states.add(final_state_label)
-    aut.remove_unreachable()
-    '''
     sys.stderr.write(
         '{}/{} {:0.2f}%\n'.format(
             state_count, previous_state_count,
@@ -194,6 +182,10 @@ def main():
         help='do not merge states within given length of suffix')
 
     args = parser.parse_args()
+    if args.command == None:
+        sys.stderr.write("Error: no arguments\n")
+        sys.stderr.write("Use 'prune' or 'merge' commands for reduction\n")
+        exit(1)
 
     # parse target NFA
     aut = nfa.Nfa.parse_fa(args.aut)
