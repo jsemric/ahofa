@@ -81,7 +81,7 @@ def main():
     args = parser.parse_args()
     if args.command == None:
         sys.stderr.write("Error: no arguments\n")
-        sys.stderr.write("Use 'prune' or 'merge' commands for reduction\n")
+        sys.stderr.write("Use '--help' or '-h' for help.\n")
         exit(1)
 
     if args.command == 'min':
