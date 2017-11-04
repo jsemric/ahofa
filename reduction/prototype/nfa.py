@@ -252,52 +252,74 @@ class Nfa:
     @classmethod
     def parse_fa(cls, fname):
         out = Nfa()
-        rules = 0
         with open(fname, 'r') as f:
-            for line in f:
-                # erase new line at the end of the string
-                if line[-1] == '\n':
-                    line = line[:-1]
-
-                if rules == 0:
-                    # read initial state
-                    if cls.RE_state_FA_format.match(line):
-                        out._add_initial_state(int(line))
-                        rules = 1
-                    else:
-                        raise RuntimeError('invalid syntax: \"' + line + '\"')
-                elif rules == 1:
-                    # read transitions
-                    if cls.RE_transition_FA_format.match(line):
-                        p, q, a = line.split()
-                        p = int(p)
-                        q = int(q)
-                        a = int(a,0)
-                        out._add_rule(p,q,a)
-                    elif cls.RE_state_FA_format.match(line):
-                        out._add_final_state(int(line))
-                        rules = 2
-                    else:
-                        raise RuntimeError('invalid syntax: \"' + line + '\"')
-                else:
-                    if cls.RE_state_FA_format.match(line):
-                        out._add_final_state(int(line))
-                    else:
-                        raise RuntimeError('invalid syntax: \"' + line + '\"')
+            out.read_fa(f)
 
         return out
 
+    def read_fa(self, f):
+        rules = 0
+        for line in f:
+            # erase new line at the end of the string
+            if line[-1] == '\n':
+                line = line[:-1]
+
+            if rules == 0:
+                # read initial state
+                if Nfa.RE_state_FA_format.match(line):
+                    self._add_initial_state(int(line))
+                    rules = 1
+                else:
+                    raise RuntimeError('invalid syntax: \"' + line + '\"')
+            elif rules == 1:
+                # read transitions
+                if Nfa.RE_transition_FA_format.match(line):
+                    p, q, a = line.split()
+                    p = int(p)
+                    q = int(q)
+                    a = int(a,0)
+                    self._add_rule(p,q,a)
+                elif Nfa.RE_state_FA_format.match(line):
+                    self._add_final_state(int(line))
+                    rules = 2
+                else:
+                    raise RuntimeError('invalid syntax: \"' + line + '\"')
+            else:
+                if Nfa.RE_state_FA_format.match(line):
+                    self._add_final_state(int(line))
+                else:
+                    raise RuntimeError('invalid syntax: \"' + line + '\"')
+
+    @classmethod
+    def ba_to_fa(cls, data):
+        for line in data:
+            if ',' in line:
+                a,s1,s2 = re.split('(?:,|->)\s*', line[:-1])
+                yield s1[1:-1] + ' ' + s2[1:-1] + ' ' + a + '\n'
+            else:
+                yield line[1:-2] + '\n'
+
+    @classmethod
+    def fa_to_ba(cls, data):
+        for line in data:
+            if ' ' in line:
+                s1, s2, a = line.split()
+                yield a + ',[' + s1 + ']' + '->[' + s2 + ']\n'
+            else:
+                yield '[' + line[:-1] + ']\n'
+
     def write_fa(self):
-        yield self._initial_state
+        yield str(self._initial_state) + '\n'
         for state, rules in self._transitions.items():
             for key, value in rules.items():
                 for q in value:
-                    yield ' '.join((str(state),str(q),hex(key)))
-        yield from self._final_states
+                    yield '{} {} {}\n'.format(state, q, hex(key))
+        for qf in self._final_states:
+            yield '{}\n'.format(qf)
 
-    def print_fa(self):
+    def print_fa(self, f=None):
         for line in self.write_fa():
-            print(line)
+            print(line, end='', file=f)
 
     def to_dot(self):
         yield 'digraph NFA {\n \
