@@ -1,6 +1,6 @@
 CXX=g++
 CXXFLAGS=-std=c++17 -Wall -Wextra -pedantic -O3 #-DNDEBUG
-LIBS=-lpcap -lpthread
+LIBS=-lpcap -lpthread -lboost_system -lboost_filesystem
 PROG=nfa_error
 
 all: $(PROG)

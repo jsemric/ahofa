@@ -13,10 +13,14 @@
 #include <ctype.h>
 #include <getopt.h>
 
+#include <boost/filesystem.hpp>
+
 #include "nfa.h"
 #include "pcap_reader.h"
 
 #define db(x) std::cerr << x << "\n"
+
+namespace fs = boost::filesystem;
 
 const char *helpstr =
 "Usage: ./nfa_error [OPTIONS] TARGET [REDUCED] PCAP ...\n"
@@ -170,14 +174,14 @@ void write_output(std::ostream &out) {
 
     out << "***************************************************************\n";
     if (accepted_only) {
-        out << "NFA                 : " << nfa_str1 << "\n";
+        out << "NFA                 : " << fs::basename(nfa_str1) << "\n";
         out << "Total packets       : " << total_packets << "\n";
         out << "Accepted            : " << accepted_target << "\n";
     }
     else {
         float err = wrongly_classified * 1.0 / total_packets;
-        out << "Target              : " << nfa_str1 << "\n";
-        out << "Reduced             : " << nfa_str2 << "\n";
+        out << "Target              : " << fs::basename(nfa_str1) << "\n";
+        out << "Reduced             : " << fs::basename(nfa_str2) << "\n";
         out << "Total packets       : " << total_packets << "\n";
         out << "Accepted by target  : " << accepted_target << "\n";
         out << "Accepted by reduced : " << accepted_reduced << "\n";
