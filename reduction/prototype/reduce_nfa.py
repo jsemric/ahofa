@@ -243,7 +243,7 @@ def main():
             check_freq(aut, freq)
             prune_freq(aut, freq, args.reduction)
         elif args.bfs:
-            rtype = 'bfs'
+            rtype = 'bfs' + str(args.bfs)
             prune_bfs(aut, args.bfs)
         elif args.linear:
             rtype = 'linear'

@@ -159,15 +159,12 @@ class Nfa:
         succ = self.succ
         actual = set([self._initial_state])
         reached = set()
-        while True:
+        while actual:
             reached = reached.union(actual)
             new = set()
             for q in actual:
                 new = new.union(succ[q])
-            new -= reached
-            actual = new
-            if not new:
-                break
+            actual = new - reached
 
         self.remove_states(set([s for s in self.states if s not in reached]))
 
