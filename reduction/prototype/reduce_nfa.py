@@ -5,6 +5,8 @@ import os, sys
 import operator
 import argparse
 import random
+import subprocess
+import re
 
 import nfa
 
@@ -19,6 +21,13 @@ def show_progress():
     if global_counter % 80 == 79:
         sys.stdout.write('\n')
         sys.stdout.flush()
+
+def reduction_result(previous_states, current_states):
+    sys.stderr.write(
+        '{}/{} {:0.2f}%\n'.format(
+            current_states, previous_states,
+            current_states * 100 / previous_states)
+        )
 
 def merge_random(aut, pct=0, prefix=0, suffix=0):
     # result is mapping state->state
@@ -35,10 +44,11 @@ def merge_random(aut, pct=0, prefix=0, suffix=0):
     equiv_groups_count = int(aut.state_count * pct) - (aut.state_count - \
     len(states))
     print(equiv_groups_count, pct, aut.state_count, len(states))
-    assert(equiv_groups_count > 1)
     if not equiv_groups_count > 1:
-        return
-    equiv_groups = [set() for x in range(equiv_groups_count)]
+        # minimal number of equivalence groups
+        equiv_groups = [set() for x in range(3)]
+    else:
+        equiv_groups = [set() for x in range(equiv_groups_count)]
 
     for state in states:
         x = random.randrange(0, equiv_groups_count)
@@ -71,7 +81,6 @@ def get_nfa_freq(fname):
     return freq
 
 def check_freq(aut, freq):
-    # TODO
     depth = aut.state_depth
 
     succ = aut.succ
@@ -83,7 +92,6 @@ def check_freq(aut, freq):
                     raise RuntimeError('invalid frequencies')
 
 def prune_freq(aut, freq, pct=0):
-    # TODO
     marked = set()
     previous_state_count = aut.state_count
     if pct == 0:
@@ -101,11 +109,7 @@ def prune_freq(aut, freq, pct=0):
                 break
 
     aut.prune(marked)
-    state_count = aut.state_count
-    sys.stderr.write(
-        '{}/{} {:0.2f}%\n'.format(
-            state_count, previous_state_count,
-            state_count * 100 / previous_state_count))
+    reduction_result(previous_state_count, aut.state_count)
 
 def prune_bfs(aut, depth, ratio=0):
     previous_state_count = aut.state_count
@@ -115,15 +119,45 @@ def prune_bfs(aut, depth, ratio=0):
             state for state in aut.states if state_depth[state] > depth
             ]))
 
-    state_count = aut.state_count
-    sys.stderr.write(
-        '{}/{} {:0.2f}%\n'.format(
-            state_count, previous_state_count,
-            state_count * 100 / previous_state_count))
+    reduction_result(previous_state_count, aut.state_count)
 
-def prune_random(aut, pct):
-    # TODO
-    pass
+def prune_linear(aut, pct=0.1):
+    marked = set()
+    previous_state_count = aut.state_count
+    # states sorted according to its depth
+    depth = aut.state_depth
+    srt_states = sorted(list(aut.states), key=lambda x : -depth[x])
+    # number of removed states
+    cnt = aut.state_count - int(aut.state_count * pct)
+    for state in srt_states:
+        if cnt:
+            cnt -= 1
+            marked.add(state)
+        else:
+            break
+
+    aut.prune(marked)
+    reduction_result(previous_state_count, aut.state_count)
+
+def generate_output(aut, folder, filename, to_dot):
+    dest = os.path.join(folder,filename + '.fa')
+    # create file with reduced automaton
+    sys.stderr.write('Saving NFA to ' + dest + '\n')
+    with open(dest,'w') as f:
+        aut.print_fa(f)
+
+    if not to_dot:
+        return
+
+    # create dot
+    dest = os.path.join(folder,filename + '.dot')
+    sys.stderr.write('Saving dot to ' + dest + '\n')
+    with open(dest,'w') as f:
+        aut.print_dot(f)
+    # create jpg
+    jpgdest = os.path.join(folder,filename + '.jpg')
+    sys.stderr.write('Saving jpg to ' + jpgdest + '\n')
+    subprocess.call(' '.join(['dot -Tjpg', dest, '-o', jpgdest]).split())
 
 def main():
     '''
@@ -153,10 +187,17 @@ def main():
         '-r','--reduction', type=float, metavar='PCT', default=0.5,
         help='ratio of reduction of states')
 
+    general_parser.add_argument(
+        '-g','--gen-out', action='store_true', help='generate output in fa')
+    general_parser.add_argument(
+        '-d','--to-dot', action='store_true',
+        help='generate output in dot and jpg format')
+
     # 2 commands for reduction
     subparser = parser.add_subparsers(
         help='type of the reduction',
         dest='command')
+
     # state pruning
     prune_parser = subparser.add_parser(
         'prune', help='reduce NFA by states pruning',
@@ -166,7 +207,7 @@ def main():
         '--freq', type=str, metavar='FILE',
         help='reduce NFA according to frequencies')
     prune_mxgroup.add_argument(
-        '--random', action='store_true', help='prune randomly')
+        '--linear', action='store_true', help='prune linearly')
     prune_mxgroup.add_argument(
         '--bfs', type=int, metavar='DEPTH', help='prune like BFS')
 
@@ -189,31 +230,55 @@ def main():
 
     # parse target NFA
     aut = nfa.Nfa.parse_fa(args.aut)
+    # reduction parameter, used for generating output
+    rtype = ''
+    rpar = ''
 
     # reduce
     if args.command == 'prune':
         if args.freq:
+            rtype = 'freq'
+            rpar = 'r{}'.format(args.reduction)
             freq = get_nfa_freq(args.freq)
             check_freq(aut, freq)
             prune_freq(aut, freq, args.reduction)
         elif args.bfs:
+            rtype = 'bfs'
             prune_bfs(aut, args.bfs)
-        elif args.random:
-            prune_random(aut, args.reduction)
+        elif args.linear:
+            rtype = 'linear'
+            rpar = 'r{}'.format(args.reduction)
+            prune_linear(aut, args.reduction)
     elif args.command == 'merge':
+        rtype = 'rand'
+        rpar = 'r{}p{}'.format(args.reduction, args.prefix)
         merge_random(aut, args.reduction, args.prefix, args.suffix)
 
     if args.add_sl:
         aut.selfloop_to_finals()
 
     # output result
-    if args.output:
-        with open(args.output, 'w') as out:
-            for line in aut.write_fa():
-                print(line, file=out)
+    if args.gen_out:
+        folder = os.path.dirname(args.aut)
+        output = re.sub('\.fa$', '', os.path.basename(args.aut))
+        if args.output:
+            if not os.path.isdir(args.output):
+                output = re.sub('\.fa$', '', os.path.basename(args.output))
+            folder = os.path.dirname(args.output)
+
+        output += '-' + args.command
+        output += '-' + rtype
+        output += '-' + rpar if rpar else ''
+
+        generate_output(aut, folder, output, args.to_dot)
     else:
-        for line in aut.write_fa():
-            print(line)
+        if args.output:
+            with open(args.output, 'w') as out:
+                for line in aut.write_fa():
+                    print(line, file=out, end='')
+        else:
+            for line in aut.write_fa():
+                print(line, end='')
 
 if __name__ == "__main__":
     main()

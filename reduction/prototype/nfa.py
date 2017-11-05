@@ -175,7 +175,7 @@ class Nfa:
         final_state_label = max(self.states) + 1
         self._add_final_state(final_state_label)
 
-        for state in to_prune:
+        for state in to_prune | self._final_states.copy():
             self.merge_states(final_state_label, state)
 
         self.clear_final_state_transitions()
@@ -321,7 +321,7 @@ class Nfa:
         for line in self.write_fa():
             print(line, end='', file=f)
 
-    def to_dot(self):
+    def write_dot(self):
         yield 'digraph NFA {\n \
         rankdir=LR;size="8,5"\n \
         graph [ dpi = 400 ]\n \
@@ -338,3 +338,7 @@ class Nfa:
                 yield ' '.join(('q' + str(state), '->', 'q' + str(s), ';\n'))
 
         yield '}\n'
+
+    def print_dot(self, f=None):
+        for line in self.write_dot():
+            print(line, end='', file=f)
