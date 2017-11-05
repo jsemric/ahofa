@@ -38,6 +38,7 @@ bool accepted_only = false;
 bool continue_work = true;
 std::mutex mux;
 // data
+std::string nfa_str1, nfa_str2;
 unsigned total_packets = 0;
 unsigned accepted_target = 0;
 unsigned accepted_reduced = 0;
@@ -168,12 +169,16 @@ void compute_error(
 void write_output(std::ostream &out) {
 
     out << "***************************************************************\n";
-    out << "Total packets       : " << total_packets << "\n";
     if (accepted_only) {
+        out << "NFA                 : " << nfa_str1 << "\n";
+        out << "Total packets       : " << total_packets << "\n";
         out << "Accepted            : " << accepted_target << "\n";
     }
     else {
         float err = wrongly_classified * 1.0 / total_packets;
+        out << "Target              : " << nfa_str1 << "\n";
+        out << "Reduced             : " << nfa_str2 << "\n";
+        out << "Total packets       : " << total_packets << "\n";
         out << "Accepted by target  : " << accepted_target << "\n";
         out << "Accepted by reduced : " << accepted_reduced << "\n";
         out << "Wrongly classified  : " << wrongly_classified << "\n";
@@ -191,7 +196,7 @@ void write_output(std::ostream &out) {
 int main(int argc, char **argv) {
 
     timepoint = std::chrono::steady_clock::now();
-    std::string nfa_str1, nfa_str2, ofname;
+    std::string ofname;
     std::vector<std::string> pcaps;
 
     const char *outfile = nullptr;
@@ -239,9 +244,11 @@ int main(int argc, char **argv) {
         }
 
         // get automata
-        target.read_from_file(argv[opt_cnt]);
+        nfa_str1 = argv[opt_cnt];
+        target.read_from_file(nfa_str1.c_str());
         if (!accepted_only) {
-            reduced.read_from_file(argv[opt_cnt + 1]);
+            nfa_str2 = argv[opt_cnt + 1];
+            reduced.read_from_file(nfa_str2.c_str());
         }
 
         // get capture files
