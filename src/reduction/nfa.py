@@ -122,7 +122,7 @@ class Nfa:
 
         return not sum(alph)
 
-    def lightweight_minimization(self):
+    def lightweight_minimization(self, collapse_finals=True):
         '''
         TODO Add comment.
         '''
@@ -147,9 +147,13 @@ class Nfa:
                     self._add_rule(state, x, key)
 
         # merge all final states to one
-        self.prune(self._final_states.copy())
+        if collapse_finals:
+            self.collapse_final_states()
 
         return self.remove_unreachable()
+
+    def collapse_final_states(self):
+        self.prune(self._final_states.copy())
 
     def clear_final_state_transitions(self):
         for fstate in self._final_states:

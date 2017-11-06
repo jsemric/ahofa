@@ -18,9 +18,6 @@ def show_progress():
     if global_counter % 16 == 15:
         sys.stdout.write('#')
         sys.stdout.flush()
-    if global_counter % 80 == 79:
-        sys.stdout.write('\n')
-        sys.stdout.flush()
 
 def reduction_result(previous_states, current_states):
     sys.stderr.write(
@@ -34,16 +31,21 @@ def merge_random(aut, pct=0, prefix=0, suffix=0):
     res = {}
     # set of states which will be collapsed
     state_depth = aut.state_depth
-    # FIXME not max depth
-    max_depth = max(state_depth.values()) - suffix
-    states = [
-        state for state in aut.states
-        if state_depth[state] > prefix and state_depth[state] < max_depth ]
+    states = [ state for state in aut.states if state_depth[state] > prefix ]
+    if suffix:
+        succ = aut.succ
+        pred = aut.pred
+        tmp = [i for i in aut.states if not succ[i]]
+        for i in range(suffix):
+            for s in tmp.copy():
+                tmp |= pred[s]
+        states -= tmp
 
     # create equivalence classes
     equiv_groups_count = int(aut.state_count * pct) - (aut.state_count - \
     len(states))
-    print(equiv_groups_count, pct, aut.state_count, len(states))
+    sys.stderr.write(
+        'Number of equivalence groups: ' + str(equiv_groups_count) + '\n')
     if not equiv_groups_count > 1:
         # minimal number of equivalence groups
         equiv_groups = [set() for x in range(3)]
@@ -61,11 +63,12 @@ def merge_random(aut, pct=0, prefix=0, suffix=0):
             for q in eq:
                 res[q] = p
                 aut.merge_states(p, q)
-                show_progress()
+                #show_progress()
         elif len(eq) == 1:
             p = eq.pop()
             res[p] = p
 
+    aut.collapse_final_states()
     aut.clear_final_state_transitions()
     aut.remove_unreachable()
     sys.stdout.write('\n')
@@ -219,7 +222,7 @@ def main():
         '--prefix', type=int, default=2,
         help='do not merge states within given length of prefix')
     merge_parser.add_argument(
-        '--suffix', type=int, default=2,
+        '--suffix', type=int, default=0,
         help='do not merge states within given length of suffix')
 
     args = parser.parse_args()

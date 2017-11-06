@@ -86,6 +86,10 @@ def main():
 
     if args.command == 'min':
         jarfile = search_for_file('Reduce.jar')
+        if jarfile == None:
+            sys.stderr.write(
+                'Error: cannot find Reduce tool in this directory\n')
+            sys.exit(1)
         if not args.output:
             sys.stderr.write('Error: no output specified\n')
             exit(1)
@@ -100,6 +104,10 @@ def main():
         ba_to_fa_format(reduce_file.name, args.output)
     elif args.command == 'issubset':
         jarfile = search_for_file('RABIT.jar')
+        if jarfile == None:
+            sys.stderr.write(
+                'Error: cannot find RABIT tool in this directory\n')
+            sys.exit(1)
         aut1 = nfa.Nfa.parse_fa(args.NFA1)
         aut2 = nfa.Nfa.parse_fa(args.NFA2)
         aut1.selfloop_to_finals()
@@ -118,7 +126,7 @@ def main():
         gen = aut.write_fa()
     elif args.command == 'draw':
         aut = nfa.Nfa.parse_fa(args.input)
-        gen = aut.to_dot()
+        gen = aut.write_dot()
 
     if args.command == 'lmin' or args.command == 'draw':
         if args.output:

@@ -2,7 +2,7 @@
 
 import sys
 
-sys.path.append('reduction/prototype')
+sys.path.append('src/reduction')
 
 import nfa_handler
 
