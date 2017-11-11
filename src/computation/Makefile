@@ -1,5 +1,11 @@
 CXX=g++
-CXXFLAGS=-std=c++17 -Wall -Wextra -pedantic -O3 #-DNDEBUG
+CXX_VERSION=$(shell $(CXX) -dumpversion)
+STD=-std=c++14
+ifeq ($(shell expr $(CXX_VERSION) '>=' 5.1), 1)
+STD=-std=c++17
+endif
+
+CXXFLAGS=$(STD) -Wall -Wextra -pedantic -O3 #-DNDEBUG
 LIBS=-lpcap -lpthread -lboost_system -lboost_filesystem
 PROG=nfa_error label_nfa
 
