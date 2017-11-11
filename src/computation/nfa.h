@@ -108,6 +108,7 @@ inline void NFA::label_states(
 {
     std::set<unsigned long> actual{initial_state};
     labeled = std::vector<bool>(state_max);
+    labeled[initial_state] = true;
 
     for (unsigned i = 0; i < length; i++) {
         std::set<unsigned long> tmp;
