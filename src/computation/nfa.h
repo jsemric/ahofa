@@ -31,21 +31,6 @@ struct Triple
     Triple(T1 t1, T2 t2, T3 t3) : first{t1}, second{t2}, third{t3} {};
 };
 
-class FiniteAutomatonException : public std::exception
-{
-private:
-    std::string errorMessage;
-
-public:
-    FiniteAutomatonException(std::string str="invalid syntax of NFA") :
-        errorMessage{str} {};
-
-    virtual const char* what() const throw()
-    {
-        return errorMessage.c_str();
-    }
-};
-
 /// Template class for NFA.
 class NFA
 {
@@ -56,7 +41,6 @@ private:
     unsigned long initial_state;
     unsigned long state_max;
     std::vector<unsigned long> state_freq;
-    std::vector<unsigned> state_depth;
     std::vector<bool> visited_states;
     StrVec state_rmap;
 
@@ -74,13 +58,20 @@ public:
     inline void compute_frequency(const U word, unsigned length);
 
     template<typename U>
-    inline void compute_packet_frequency(const U word, unsigned length);
+    inline void label_states(const U word, unsigned length);
+
+    template<typename U>
+    inline void label_states(
+        const U word, unsigned length, std::vector<bool> &labeled) const;
 
     void print(std::ostream &out = std::cout, bool usemap = true) const;
     void print_freq(std::ostream &out = std::cout, bool usemap = true) const;
     StrVec read_from_file(std::ifstream &input);
     StrVec read_from_file(const char *input);
     void compute_depth();
+    unsigned long state_count() const { return state_max + 1; }
+    std::vector<unsigned> get_states_depth() const;
+    StrVec get_rmap() const { return state_rmap; }
 
 private:
     void update_freq() noexcept;
@@ -112,7 +103,30 @@ inline bool NFA::accept(const U word, unsigned length) const
 }
 
 template<typename U>
-inline void NFA::compute_packet_frequency(const U word, unsigned length)
+inline void NFA::label_states(
+        const U word, unsigned length, std::vector<bool> &labeled) const
+{
+    std::set<unsigned long> actual{initial_state};
+    labeled = std::vector<bool>(state_max);
+
+    for (unsigned i = 0; i < length; i++) {
+        std::set<unsigned long> tmp;
+        for (auto j : actual) {
+            assert ((j << shift) + word[j] < transitions.size());
+            auto trans = transitions[(j << shift) + word[i]];
+            if (!trans.empty()) {
+                for (auto k : trans) {
+                    labeled[k] = true;
+                    tmp.insert(k);
+                }
+            }
+        }
+        actual = std::move(tmp);
+    }
+}
+
+template<typename U>
+inline void NFA::label_states(const U word, unsigned length)
 {
     std::set<unsigned long> actual{initial_state};
 

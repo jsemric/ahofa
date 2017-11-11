@@ -1,7 +1,7 @@
 CXX=g++
 CXXFLAGS=-std=c++17 -Wall -Wextra -pedantic -O3 #-DNDEBUG
 LIBS=-lpcap -lpthread -lboost_system -lboost_filesystem
-PROG=nfa_error
+PROG=nfa_error label_nfa
 
 all: $(PROG)
 
@@ -19,6 +19,12 @@ nfa_error.o: nfa_error.cpp pcap_reader.h
 
 nfa_error: nfa_error.o nfa.o pcap_reader.h
 	$(CXX) $(CXXFLAGS) nfa_error.o nfa.o -o $@ $(LIBS)
+
+label_nfa.o: label_nfa.cpp pcap_reader.h
+	$(CXX) $(CXXFLAGS) -c label_nfa.cpp -o $@ $(LIBS)
+
+label_nfa: label_nfa.o nfa.o pcap_reader.h
+	$(CXX) $(CXXFLAGS) label_nfa.o nfa.o -o $@ $(LIBS)
 
 nodata:
 	rm -f obs* tmp* *.fsm *.fa *.pa *.ba

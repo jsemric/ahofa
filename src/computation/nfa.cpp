@@ -134,9 +134,9 @@ void NFA::print(std::ostream &out, bool usemap) const
     }
 }
 
-void NFA::compute_depth()
+std::vector<unsigned> NFA::get_states_depth() const
 {
-    state_depth = std::vector<unsigned>(state_max + 1);
+    std::vector<unsigned> state_depth(state_max + 1);
     std::set<unsigned long> actual{initial_state};
     std::set<unsigned long> all{initial_state};
     unsigned cnt = 1;
@@ -158,15 +158,6 @@ void NFA::compute_depth()
         actual = std::move(new_gen);
         cnt++;
     }
-}
 
-void NFA::print_freq(std::ostream &out, bool usemap) const
-{
-    auto fmap = [this, &usemap](unsigned int x) {
-        return usemap ? this->state_rmap[x] : std::to_string(x);
-    };
-
-    for (unsigned long i = 0; i <= state_max; i++) {
-        out << fmap(i) << " " << state_freq[i] << " " << state_depth[i] << "\n";
-    }
+    return state_depth;
 }

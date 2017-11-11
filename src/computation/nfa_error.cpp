@@ -192,7 +192,7 @@ void write_output(std::ostream &out) {
         std::chrono::steady_clock::now() - timepoint).count();
     unsigned sec = msec / 1000 / 1000;
     unsigned min = sec / 60;
-    out << "Elapsed time        : " << min << "m/" << sec  << "s/"
+    out << "Elapsed time        : " << min << "m/" << sec % 60  << "s/"
         << msec % 1000 << "ms\n";
     out << "***************************************************************\n";
 }
@@ -234,7 +234,7 @@ int main(int argc, char **argv) {
 
     NFA reduced, target;
     try {
-        if (nworkers <= 0  &&
+        if (nworkers <= 0 ||
             nworkers >= std::thread::hardware_concurrency())
         {
             throw std::runtime_error(
