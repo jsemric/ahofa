@@ -198,7 +198,8 @@ void write_output(std::ostream &out) {
             out << "    \"target states\"       : " << sc1 << ",\n";
             out << "    \"reduced\"             : \"" << fs::basename(nfa_str2)
                 << "\",\n";
-            out << "    \"reduction\"           : " << 100.0 * sc2 / sc1
+            out << "    \"reduced states\"       : " << sc2 << ",\n";
+            out << "    \"reduction\"           : " << 1.0 * sc2 / sc1
                 << ",\n";
             out << "    \"Total packets\"       : " << total_packets << ",\n";
             out << "    \"Accepted by target\"  : " << accepted_target

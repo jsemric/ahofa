@@ -246,9 +246,9 @@ def main():
                 sys.stderr.write('Computing error for {}\n'.format(i))
                 output = re.sub('\.fa$', '.json', os.path.basename(i))
                 output = os.path.join(eoutdir, output)
-                subprocess.call(
-                    ['./nfa_error', binput, i, *samples, '-j', '-o', output,
-                    '-n',workers])
+                proc = ['./nfa_error', binput, i, '-j', '-o', output,
+                    '-n',workers] + list(samples)
+                subprocess.call(proc)
 
 if __name__ == "__main__":
     main()
