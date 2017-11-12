@@ -6,6 +6,7 @@ import argparse
 import subprocess
 import re
 import datetime
+import glob
 
 import nfa
 import reductions
@@ -205,6 +206,8 @@ def main():
         # batch file execution variables
         binput = str()
         boutdir = '.'
+        eoutdir = 'data/errors/'
+        workers = 1
         pcaps = None
         with open(args.batch, 'r') as bf:
             buf = str()
@@ -219,6 +222,8 @@ def main():
                     boutdir = line.split('=')[1].strip()
                 elif line.startswith('pcaps'):
                     pcaps = line.split('=')[1].strip()
+                elif line.startswith('workers'):
+                    workers = line.split('=')[1].strip()
                 else:
                     buf += line
         res = []
@@ -226,16 +231,24 @@ def main():
             try:
                 if line:
                     exe = line.split() + ['-o', str(boutdir), str(binput)]
-                    sys.stderr.write(exe + '\n')
+                    sys.stderr.write(' '.join(exe) + '\n')
                     res.append(execute(parser.parse_args(exe)))
             except Exception as e:
                 sys.stderr.write('Error: ' + str(e))
 
         if pcaps:
+            samples = set()
+            for i in pcaps.split():
+                samples |= set(glob.glob(i))
+            sys.stderr.write('Samples:\n' + '\n'.join(samples) + '\n\n')
             # compute error
             for i in res:
                 sys.stderr.write('Computing error for {}\n'.format(i))
-                subprocess.call(['./nfa_error', binput, i, pcaps])
+                output = re.sub('\.fa$', '.json', os.path.basename(i))
+                output = os.path.join(eoutdir, output)
+                subprocess.call(
+                    ['./nfa_error', binput, i, *samples, '-j', '-o', output,
+                    '-n',workers])
 
 if __name__ == "__main__":
     main()

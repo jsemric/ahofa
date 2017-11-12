@@ -33,11 +33,13 @@ const char *helpstr =
 "  -a            : compute only accepted packets by TARGET\n"
 "  -n <NWORKERS> : number of workers to run in parallel\n"
 "  -x            : slower but check if REDUCED is really over-approximation\n"
+"  -j            : stores the result in JSON format\n"
 "                  of TARGET\n";
 
 // program options
 unsigned nworkers = 1;
 bool accepted_only = false;
+bool tojson = false;
 // thread communication
 bool continue_work = true;
 std::mutex mux;
@@ -93,7 +95,7 @@ void compute_accepted(const NFA &nfa, const std::vector<std::string> &pcaps)
     }
     catch (std::runtime_error &e) {
         i++;
-        std::cerr << "Warning: " << e.what() << "\n";
+        std::cerr << "\033[1;31mWarning:\033[0m " << e.what() << "\n";
         // process other capture files
         goto START1;
     }
@@ -160,7 +162,7 @@ void compute_error(
     }
     catch (std::runtime_error &e) {
         i++;
-        std::cerr << "Warning: " << e.what() << "\n";
+        std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
         // process other capture files
         goto START2;
     }
@@ -173,8 +175,13 @@ void compute_error(
 
 void write_output(std::ostream &out) {
 
-    out << "***************************************************************\n";
+    unsigned msec = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - timepoint).count();
+    unsigned sec = msec / 1000 / 1000;
+    unsigned min = sec / 60;
     if (accepted_only) {
+        out << "*************************************************************"
+            << "**\n";
         out << "NFA                 : " << fs::basename(nfa_str1) << "\n";
         out << "Total packets       : " << total_packets << "\n";
         out << "Accepted            : " << accepted_target << "\n";
@@ -183,6 +190,29 @@ void write_output(std::ostream &out) {
         float err = wrongly_classified * 1.0 / total_packets;
         unsigned long sc1 = target.state_count();
         unsigned long sc2 = reduced.state_count();
+
+        if (tojson) {
+            out << "{\n";
+            out << "    \"target\"              : \"" << fs::basename(nfa_str1)
+                << "\",\n";
+            out << "    \"target states\"       : " << sc1 << ",\n";
+            out << "    \"reduced\"             : \"" << fs::basename(nfa_str2)
+                << "\",\n";
+            out << "    \"reduction\"           : " << 100.0 * sc2 / sc1
+                << ",\n";
+            out << "    \"Total packets\"       : " << total_packets << ",\n";
+            out << "    \"Accepted by target\"  : " << accepted_target
+                << ",\n";
+            out << "    \"Accepted by reduced\" : " << accepted_reduced
+                << ",\n";
+            out << "    \"Wrongly classified\"  : " << wrongly_classified
+                << ",\n";
+            out << "    \"Error\"               : " << err << "\n";
+            out << "}\n";
+            return;
+        }
+        out << "*************************************************************"
+            << "**\n";
         out << "Target              : " << fs::basename(nfa_str1) << "\n";
         out << "State count         : " << sc1 << "\n";
         out << "Reduced             : " << fs::basename(nfa_str2) << "\n";
@@ -194,10 +224,6 @@ void write_output(std::ostream &out) {
         out << "Wrongly classified  : " << wrongly_classified << "\n";
         out << "Error               : " << err << "\n";
     }
-    unsigned msec = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now() - timepoint).count();
-    unsigned sec = msec / 1000 / 1000;
-    unsigned min = sec / 60;
     out << "Elapsed time        : " << min << "m/" << sec % 60  << "s/"
         << msec % 1000 << "ms\n";
     out << "***************************************************************\n";
@@ -213,7 +239,7 @@ int main(int argc, char **argv) {
     int opt_cnt = 1;
     int c;
     bool fast = true;
-    while ((c = getopt(argc, argv, "ho:n:ax")) != -1) {
+    while ((c = getopt(argc, argv, "ho:n:axj")) != -1) {
         opt_cnt++;
         switch (c) {
             case 'h':
@@ -232,6 +258,9 @@ int main(int argc, char **argv) {
                 break;
             case 'x':
                 fast = false;
+                break;
+            case 'j':
+                tojson = true;
                 break;
             default:
                 return 1;
@@ -313,7 +342,7 @@ int main(int argc, char **argv) {
         }
     }
     catch (std::exception &e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "\033[1;31mError:\033[0m " << e.what() << std::endl;
         return 1;
     }
 
