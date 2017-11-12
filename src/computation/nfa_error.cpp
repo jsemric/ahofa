@@ -42,6 +42,7 @@ bool accepted_only = false;
 bool continue_work = true;
 std::mutex mux;
 // data
+NFA reduced, target;
 std::string nfa_str1, nfa_str2;
 unsigned total_packets = 0;
 unsigned accepted_target = 0;
@@ -180,8 +181,13 @@ void write_output(std::ostream &out) {
     }
     else {
         float err = wrongly_classified * 1.0 / total_packets;
+        unsigned long sc1 = target.state_count();
+        unsigned long sc2 = reduced.state_count();
         out << "Target              : " << fs::basename(nfa_str1) << "\n";
+        out << "State count         : " << sc1 << "\n";
         out << "Reduced             : " << fs::basename(nfa_str2) << "\n";
+        out << "State count         : " << sc2 << "\n";
+        out << "Reduction           : " << 1.0 * sc2 / sc1 << "\n";
         out << "Total packets       : " << total_packets << "\n";
         out << "Accepted by target  : " << accepted_target << "\n";
         out << "Accepted by reduced : " << accepted_reduced << "\n";
@@ -232,7 +238,6 @@ int main(int argc, char **argv) {
         }
     }
 
-    NFA reduced, target;
     try {
         if (nworkers <= 0 ||
             nworkers >= std::thread::hardware_concurrency())
@@ -281,7 +286,7 @@ int main(int argc, char **argv) {
         std::vector<std::thread> threads;
         // start computation
         for (unsigned i = 0; i < nworkers; i++) {
-            threads.push_back(std::thread{[&target, &reduced, &v, i, &fast]()
+            threads.push_back(std::thread{[&v, i, &fast]()
                 {
                     if (accepted_only) {
                         compute_accepted(target, v[i]);
