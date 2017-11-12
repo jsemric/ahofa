@@ -41,17 +41,22 @@ def check_freq(aut, freq):
                 if freq[x] > freq[state] and len(pred[x]) == 1:
                     raise RuntimeError('invalid frequencies')
 
-def generate_output(aut, folder, filename, pars, to_dot):
+def generate_output(aut, folder, filename, pars, to_dot, rename=False):
     now = datetime.datetime.now()
-    idx = 0
-    while True:
-        basename = '{}-{}{}{}-{}{}.fa'.format(
-            filename, now.year % 100, now.month, now.day, idx, pars)
-        dest = os.path.join(folder, basename)
-        if os.path.exists(dest):
-            idx+=1
-        else:
-            break
+    basename = '{}-{}{}{}{}.fa'.format(
+        filename, now.year % 100, now.month, now.day, pars)
+    dest = os.path.join(folder, basename)
+
+    if rename and os.path.exists(dest):
+        idx = 0
+        while True:
+            basename = '{}-{}{}{}i{}{}.fa'.format(
+                filename, now.year % 100, now.month, now.day, idx, pars)
+            dest = os.path.join(folder, basename)
+            if os.path.exists(dest):
+                idx+=1
+            else:
+                break
 
     # create file with reduced automaton
     sys.stderr.write('Saving NFA to ' + dest + '\n')
@@ -116,7 +121,8 @@ def execute(args):
         par += '-' + rtype
         par += '-' + rpar if rpar else ''
 
-        return generate_output(aut, folder, output, par, args.to_dot)
+        return generate_output(
+            aut, folder, output, par, args.to_dot, args.rename)
     else:
         if args.output:
             with open(args.output, 'w') as out:
@@ -156,6 +162,10 @@ def main():
     general_parser.add_argument(
         '-d','--to-dot', action='store_true',
         help='generate output in dot and jpg format')
+
+    general_parser.add_argument(
+        '-n','--rename', action='store_true',
+        help='renames file if already exists')
 
     # 2 commands for reduction
     subparser = parser.add_subparsers(
@@ -209,6 +219,7 @@ def main():
         eoutdir = 'data/errors/'
         workers = 1
         pcaps = None
+        rename = None
         with open(args.batch, 'r') as bf:
             buf = str()
             for line in bf:
@@ -219,18 +230,29 @@ def main():
                 if line.startswith('input'):
                     binput = line.split('=')[1].strip()
                 elif line.startswith('outdir'):
-                    boutdir = line.split('=')[1].strip()
+                    boutdir = line.split('=')[1].strip() + '/'
                 elif line.startswith('pcaps'):
                     pcaps = line.split('=')[1].strip()
                 elif line.startswith('workers'):
                     workers = line.split('=')[1].strip()
+                elif line.startswith('rename=yes'):
+                    rename = True
                 else:
                     buf += line
+
+        if not os.path.exists(boutdir):
+            os.makedirs(boutdir)
+        if not os.path.exists(eoutdir):
+            os.makedirs(eoutdir)
+
         res = []
         for line in buf.split('\n'):
             try:
                 if line:
                     exe = line.split() + ['-o', str(boutdir), str(binput)]
+                    if rename:
+                        exe.append('--rename')
+
                     sys.stderr.write(' '.join(exe) + '\n')
                     res.append(execute(parser.parse_args(exe)))
             except Exception as e:
