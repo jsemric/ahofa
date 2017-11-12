@@ -18,6 +18,12 @@ class Nfa:
     ###########################################################################
 
     @property
+    def generator(self):
+        for s in self.succ[self._initial_state]:
+            if self._has_path_over_alph(s, s):
+                return s
+
+    @property
     def state_count(self):
         return len(self._transitions)
 

@@ -2,22 +2,13 @@
 
 from collections import defaultdict
 import os, sys
-import operator
 import argparse
-import random
 import subprocess
 import re
+import datetime
 
 import nfa
-
-global_counter = 0
-
-def show_progress():
-    global global_counter
-    global_counter += 1
-    if global_counter % 16 == 15:
-        sys.stdout.write('#')
-        sys.stdout.flush()
+import reductions
 
 def reduction_result(previous_states, current_states):
     sys.stderr.write(
@@ -26,53 +17,8 @@ def reduction_result(previous_states, current_states):
             current_states * 100 / previous_states)
         )
 
-def merge_random(aut, pct=0, prefix=0, suffix=0):
-    # result is mapping state->state
-    res = {}
-    # set of states which will be collapsed
-    state_depth = aut.state_depth
-    states = [ state for state in aut.states if state_depth[state] > prefix ]
-    if suffix:
-        succ = aut.succ
-        pred = aut.pred
-        tmp = [i for i in aut.states if not succ[i]]
-        for i in range(suffix):
-            for s in tmp.copy():
-                tmp |= pred[s]
-        states -= tmp
-
-    # create equivalence classes
-    equiv_groups_count = int(aut.state_count * pct) - (aut.state_count - \
-    len(states))
-    sys.stderr.write(
-        'Number of equivalence groups: ' + str(equiv_groups_count) + '\n')
-    if not equiv_groups_count > 1:
-        # minimal number of equivalence groups
-        equiv_groups = [set() for x in range(3)]
-    else:
-        equiv_groups = [set() for x in range(equiv_groups_count)]
-
-    for state in states:
-        x = random.randrange(0, equiv_groups_count)
-        equiv_groups[x].add(state)
-
-    for eq in equiv_groups:
-        if len(eq) > 1:
-            p = eq.pop()
-            res[p] = p
-            for q in eq:
-                res[q] = p
-                aut.merge_states(p, q)
-                #show_progress()
-        elif len(eq) == 1:
-            p = eq.pop()
-            res[p] = p
-
-    aut.collapse_final_states()
-    aut.clear_final_state_transitions()
-    aut.remove_unreachable()
-    sys.stdout.write('\n')
-    return res
+def reduce(reduction_function, args):
+    reduction_function(*args)
 
 def get_nfa_freq(fname):
     freq = {}
@@ -94,73 +40,88 @@ def check_freq(aut, freq):
                 if freq[x] > freq[state] and len(pred[x]) == 1:
                     raise RuntimeError('invalid frequencies')
 
-def prune_freq(aut, freq, pct=0):
-    marked = set()
-    previous_state_count = aut.state_count
-    if pct == 0:
-        marked = set([s for s in aut.states if freq[s] == 0])
-    else:
-        # states sorted according to its frequency
-        srt_states = sorted(list(aut.states), key=lambda x : freq[x])
-        # number of removed states
-        cnt = aut.state_count - int(aut.state_count * pct)
-        for state in srt_states:
-            if cnt:
-                cnt -= 1
-                marked.add(state)
-            else:
-                break
-
-    aut.prune(marked)
-    reduction_result(previous_state_count, aut.state_count)
-
-def prune_bfs(aut, depth, ratio=0):
-    previous_state_count = aut.state_count
-    state_depth = aut.state_depth
-    aut.prune(
-        set([
-            state for state in aut.states if state_depth[state] > depth
-            ]))
-
-    reduction_result(previous_state_count, aut.state_count)
-
-def prune_linear(aut, pct=0.1):
-    marked = set()
-    previous_state_count = aut.state_count
-    # states sorted according to its depth
-    depth = aut.state_depth
-    srt_states = sorted(list(aut.states), key=lambda x : -depth[x])
-    # number of removed states
-    cnt = aut.state_count - int(aut.state_count * pct)
-    for state in srt_states:
-        if cnt:
-            cnt -= 1
-            marked.add(state)
+def generate_output(aut, folder, filename, pars, to_dot):
+    now = datetime.datetime.now()
+    idx = 0
+    while True:
+        basename = '{}-{}{}{}-{}{}.fa'.format(
+            filename, now.year % 100, now.month, now.day, idx, pars)
+        dest = os.path.join(folder, basename)
+        if os.path.exists(dest):
+            idx+=1
         else:
             break
 
-    aut.prune(marked)
-    reduction_result(previous_state_count, aut.state_count)
-
-def generate_output(aut, folder, filename, to_dot):
-    dest = os.path.join(folder,filename + '.fa')
     # create file with reduced automaton
     sys.stderr.write('Saving NFA to ' + dest + '\n')
-    with open(dest,'w') as f:
+    with open(dest, 'w') as f:
         aut.print_fa(f)
 
-    if not to_dot:
-        return
+    if to_dot:
+        # create dot
+        dotdest = os.path.join(folder, basename + '.dot')
+        sys.stderr.write('Saving dot to ' + dest_dot + '\n')
+        with open(dest, 'w') as f:
+            aut.print_dot(f)
+        # create jpg
+        jpgdest = os.path.join(folder, basename + '.jpg')
+        sys.stderr.write('Saving jpg to ' + jpgdest + '\n')
+        subprocess.call(' '.join(['dot -Tjpg', dest, '-o', jpgdest]).split())
 
-    # create dot
-    dest = os.path.join(folder,filename + '.dot')
-    sys.stderr.write('Saving dot to ' + dest + '\n')
-    with open(dest,'w') as f:
-        aut.print_dot(f)
-    # create jpg
-    jpgdest = os.path.join(folder,filename + '.jpg')
-    sys.stderr.write('Saving jpg to ' + jpgdest + '\n')
-    subprocess.call(' '.join(['dot -Tjpg', dest, '-o', jpgdest]).split())
+    return dest
+
+def execute(args):
+    aut = nfa.Nfa.parse_fa(args.aut)
+    # reduction parameter, used for generating output
+    rtype = ''
+    rpar = ''
+
+    # reduce
+    if args.command == 'prune':
+        if args.freq:
+            rtype = 'freq'
+            rpar = 'r{}'.format(args.reduction)
+            freq = get_nfa_freq(args.freq)
+            check_freq(aut, freq)
+            reductions.prune_freq(aut, freq, args.reduction)
+        elif args.bfs:
+            rtype = 'bfs' + str(args.bfs)
+            reductions.prune_bfs(aut, args.bfs)
+        elif args.linear:
+            rtype = 'linear'
+            rpar = 'r{}'.format(args.reduction)
+            reductions.prune_linear(aut, args.reduction)
+    elif args.command == 'merge':
+        if args.one_line:
+            rtype = 'oneline-p' + str(args.prefix)
+            reductions.one_line_reduction(aut, args.prefix, args.suffix)
+        else:
+            rtype = 'rand'
+            rpar = 'r{}p{}'.format(args.reduction, args.prefix)
+            reductions.merge_random(aut, args.reduction, args.prefix, args.suffix)
+    else:
+        raise RuntimeError('invalid option')
+
+    if args.add_sl:
+        aut.selfloop_to_finals()
+    # output result
+    if args.output == None or os.path.isdir(args.output):
+        folder = '.'
+        output = re.sub('\.fa$', '', os.path.basename(args.aut))
+        if args.output:
+            folder = os.path.dirname(args.output)
+
+        par = '-' + args.command
+        par += '-' + rtype
+        par += '-' + rpar if rpar else ''
+
+        return generate_output(aut, folder, output, par, args.to_dot)
+    else:
+        if args.output:
+            with open(args.output, 'w') as out:
+                for line in aut.write_fa():
+                    out.write(line)
+        return args.output
 
 def main():
     '''
@@ -168,11 +129,11 @@ def main():
         prune:
             <+> BFS
             <+> frequency
-            <+> random
         merging:
             <+> random
     '''
     parser = argparse.ArgumentParser()
+    parser.add_argument('-b', '--batch', type=str, help='use batch file')
     # general arguments
     # common reduction arguments
     general_parser = argparse.ArgumentParser(add_help=False)
@@ -180,7 +141,8 @@ def main():
         'aut', type=str, metavar='FILE', help='input file with automaton')
     general_parser.add_argument(
         '-o','--output', type=str, metavar='FILE',
-        help='output file, if not specified everything is printed to stdout')
+        help='output file or directory, if not specified output file is '
+        'generated automatically.')
 
     general_parser.add_argument(
         '-s','--add-sl', action='store_true', help='add self-loops to final \
@@ -190,8 +152,6 @@ def main():
         '-r','--reduction', type=float, metavar='PCT', default=0.5,
         help='ratio of reduction of states')
 
-    general_parser.add_argument(
-        '-g','--gen-out', action='store_true', help='generate output in fa')
     general_parser.add_argument(
         '-d','--to-dot', action='store_true',
         help='generate output in dot and jpg format')
@@ -224,64 +184,58 @@ def main():
     merge_parser.add_argument(
         '--suffix', type=int, default=0,
         help='do not merge states within given length of suffix')
+    merge_mxgroup = merge_parser.add_mutually_exclusive_group()
+    merge_mxgroup.add_argument(
+        '--rand', action='store_true',
+        help='merge randomly, this is set by default')
+    merge_mxgroup.add_argument(
+        '--one-line', action='store_true',
+        help='merge states on the same depth level')
 
     args = parser.parse_args()
-    if args.command == None:
+    if args.command == None and args.batch == None:
         sys.stderr.write("Error: no arguments\n")
         sys.stderr.write("Use 'prune' or 'merge' commands for reduction\n")
         exit(1)
 
-    # parse target NFA
-    aut = nfa.Nfa.parse_fa(args.aut)
-    # reduction parameter, used for generating output
-    rtype = ''
-    rpar = ''
-
     # reduce
-    if args.command == 'prune':
-        if args.freq:
-            rtype = 'freq'
-            rpar = 'r{}'.format(args.reduction)
-            freq = get_nfa_freq(args.freq)
-            check_freq(aut, freq)
-            prune_freq(aut, freq, args.reduction)
-        elif args.bfs:
-            rtype = 'bfs' + str(args.bfs)
-            prune_bfs(aut, args.bfs)
-        elif args.linear:
-            rtype = 'linear'
-            rpar = 'r{}'.format(args.reduction)
-            prune_linear(aut, args.reduction)
-    elif args.command == 'merge':
-        rtype = 'rand'
-        rpar = 'r{}p{}'.format(args.reduction, args.prefix)
-        merge_random(aut, args.reduction, args.prefix, args.suffix)
-
-    if args.add_sl:
-        aut.selfloop_to_finals()
-
-    # output result
-    if args.gen_out:
-        folder = os.path.dirname(args.aut)
-        output = re.sub('\.fa$', '', os.path.basename(args.aut))
-        if args.output:
-            if not os.path.isdir(args.output):
-                output = re.sub('\.fa$', '', os.path.basename(args.output))
-            folder = os.path.dirname(args.output)
-
-        output += '-' + args.command
-        output += '-' + rtype
-        output += '-' + rpar if rpar else ''
-
-        generate_output(aut, folder, output, args.to_dot)
+    if args.command != None:
+        execute(parser.parse_args())
     else:
-        if args.output:
-            with open(args.output, 'w') as out:
-                for line in aut.write_fa():
-                    print(line, file=out, end='')
-        else:
-            for line in aut.write_fa():
-                print(line, end='')
+        # batch file execution variables
+        binput = str()
+        boutdir = '.'
+        pcaps = None
+        with open(args.batch, 'r') as bf:
+            buf = str()
+            for line in bf:
+                # remove hash comments
+                line = line.split('#')[0]
+                if line == '':
+                    continue
+                if line.startswith('input'):
+                    binput = line.split('=')[1].strip()
+                elif line.startswith('outdir'):
+                    boutdir = line.split('=')[1].strip()
+                elif line.startswith('pcaps'):
+                    pcaps = line.split('=')[1].strip()
+                else:
+                    buf += line
+        res = []
+        for line in buf.split('\n'):
+            try:
+                if line:
+                    exe = line.split() + ['-o', str(boutdir), str(binput)]
+                    sys.stderr.write(exe + '\n')
+                    res.append(execute(parser.parse_args(exe)))
+            except Exception as e:
+                sys.stderr.write('Error: ' + str(e))
+
+        if pcaps:
+            # compute error
+            for i in res:
+                sys.stderr.write('Computing error for {}\n'.format(i))
+                subprocess.call(['./nfa_error', binput, i, pcaps])
 
 if __name__ == "__main__":
     main()
