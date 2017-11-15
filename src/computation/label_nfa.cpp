@@ -92,7 +92,7 @@ void label_nfa(const NFA &nfa, const std::vector<std::string> &pcaps)
             std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
         }
         catch (std::runtime_error &e) {
-            std::cerr << "\033[1;31mWarning:\033[0m " << e.what() << "\n";
+            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
             // process other capture files
         }
         catch (std::exception &e) {
@@ -167,7 +167,8 @@ int main(int argc, char **argv)
         // checking a number of arguments (min NFA and PCAP)
         if (argc - opt_cnt < 2)
         {
-            throw std::runtime_error("invalid arguments");
+            fprintf(stderr, "Error: invalid arguments\n%s", helpstr);
+            return 1;
         }
 
         // get automata
@@ -222,7 +223,7 @@ int main(int argc, char **argv)
         }
     }
     catch (std::exception &e) {
-        std::cerr << "\033[1;31mError:\033[0m " << e.what() << std::endl;
+        std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
 

@@ -95,10 +95,10 @@ void compute_accepted(const NFA &nfa, const std::vector<std::string> &pcaps)
         }
         catch (std::ios_base::failure &e) {
             std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
+            // process other capture files, contunue for loop
         }
         catch (std::runtime_error &e) {
-            std::cerr << "\033[1;31mWarning:\033[0m " << e.what() << "\n";
-            // process other capture files, contunue for loop
+            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
         }
         catch (std::exception &e) {
             // SIGINT or other error
@@ -168,7 +168,7 @@ void compute_error(
             // process other capture files
         }
         catch (std::exception &e) {
-            ;
+            break;
         }
     }
     // sum up results
@@ -287,7 +287,8 @@ int main(int argc, char **argv)
         // checking a number of arguments
         if (argc - opt_cnt < 3 - accepted_only)
         {
-            throw std::runtime_error("invalid arguments");
+            fprintf(stderr, "Error: invalid arguments\n%s", helpstr);
+            return 1;
         }
 
         // get automata
@@ -325,14 +326,14 @@ int main(int argc, char **argv)
         // start computation
         for (unsigned i = 0; i < nworkers; i++) {
             threads.push_back(std::thread{[&v, i, &fast]()
-                {
-                    if (accepted_only) {
-                        compute_accepted(target, v[i]);
+                    {
+                        if (accepted_only) {
+                            compute_accepted(target, v[i]);
+                        }
+                        else {
+                            compute_error(target, reduced, v[i], fast);
+                        }
                     }
-                    else {
-                        compute_error(target, reduced, v[i], fast);
-                    }
-                }
                 });
         }
 
