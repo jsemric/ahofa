@@ -13,6 +13,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <cassert>
+#include <mutex>
 
 #include <pcap.h>
 #include <pcap/pcap.h>
@@ -43,12 +44,16 @@ static inline const unsigned char *get_payload(
     const unsigned char *packet,
     const struct pcap_pkthdr *header);
 
+
 template<typename F>
 void process_payload(
-        const char* capturefile,
-        F func,
-        unsigned long count = ~0UL);
+    const char* capturefile,
+    F func, const char *filter = 0,
+    unsigned long count = ~0UL);
 
+bool is_pcap_file(const char *capturefile);
+
+std::mutex bpf_compile_mux;
 
 /// Generic function for processing packet payload.
 ///
@@ -56,18 +61,31 @@ void process_payload(
 /// @param count Total number of processed packets, which includes some payload data.
 template<typename F>
 void process_payload(
-        const char* capturefile,
-        F func,
-        unsigned long count)
+    const char* capturefile,
+    F func, const char *filter,
+    unsigned long count)
 {
     char err_buf[4096] = "";
     pcap_t *pcap;
 
     if (!(pcap = pcap_open_offline(capturefile, err_buf))) {
-        throw std::runtime_error(
+        throw std::ios_base::failure(
             "cannot open pcap file '" + std::string(capturefile) + "'");
     }
 
+    struct bpf_program fp;
+    // this mutex is essential when multithreading
+    // otherwise very bad error would occur
+    bpf_compile_mux.lock();
+    if (filter) {
+        if (pcap_compile(pcap, &fp, filter, 0, 0) == -1) {
+            throw std::runtime_error("cannot parse filter");
+        }
+        if (pcap_setfilter(pcap, &fp) == -1) {
+            throw std::runtime_error("cannot install filter");
+        }
+    }
+    bpf_compile_mux.unlock();
     struct pcap_pkthdr *header;
     const unsigned char *packet, *payload;
 
@@ -94,7 +112,9 @@ inline const unsigned char *get_payload(
     if (ETHERTYPE_VLAN == ether_type)
     {
         offset = sizeof(vlan_ethhdr);
-        const vlan_ethhdr* vlan_hdr = reinterpret_cast<const vlan_ethhdr*>(packet);
+        const vlan_ethhdr* vlan_hdr =
+        reinterpret_cast<const vlan_ethhdr*>(packet);
+
         ether_type = ntohs(vlan_hdr->ether_type);
     }
 
@@ -108,7 +128,9 @@ inline const unsigned char *get_payload(
     }
     else if (ETHERTYPE_IPV6 == ether_type)
     {
-        const ip6_hdr* ip_hdr = reinterpret_cast<const ip6_hdr*>(packet + offset);
+        const ip6_hdr* ip_hdr =
+        reinterpret_cast<const ip6_hdr*>(packet + offset);
+
         offset += sizeof(ip6_hdr);
         l4_proto = ip_hdr->ip6_nxt;
     }
@@ -122,7 +144,9 @@ inline const unsigned char *get_payload(
         cond = false;
         if (IPPROTO_TCP == l4_proto)
         {
-            const tcphdr* tcp_hdr = reinterpret_cast<const tcphdr*>(packet + offset);
+            const tcphdr* tcp_hdr =
+            reinterpret_cast<const tcphdr*>(packet + offset);
+
             size_t tcp_hdr_size = tcp_hdr->th_off * 4;
             offset += tcp_hdr_size;
         }
@@ -151,14 +175,16 @@ inline const unsigned char *get_payload(
         }
         else if (IPPROTO_FRAGMENT == l4_proto)
         {
-            const ip6_frag* ip_hdr = reinterpret_cast<const ip6_frag*>(packet + offset);
+            const ip6_frag* ip_hdr =
+            reinterpret_cast<const ip6_frag*>(packet + offset);
             offset += sizeof(ip6_frag);
             l4_proto = ip_hdr->ip6f_nxt;
             cond = true;
         }
         else if (IPPROTO_IPV6 == l4_proto)
         {
-            const ip6_hdr* ip_hdr = reinterpret_cast<const ip6_hdr*>(packet + offset);
+            const ip6_hdr* ip_hdr =
+            reinterpret_cast<const ip6_hdr*>(packet + offset);
             offset += sizeof(ip6_hdr);
             l4_proto = ip_hdr->ip6_nxt;
         }

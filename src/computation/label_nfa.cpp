@@ -1,3 +1,5 @@
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include <iostream>
 #include <algorithm>
 #include <ostream>
@@ -27,11 +29,13 @@ const char *helpstr =
 "options:\n"
 "  -h            : show this help and exit\n"
 "  -o <FILE>     : specify output file\n"
-"  -n <NWORKERS> : number of workers to run in parallel\n";
+"  -n <NWORKERS> : number of workers to run in parallel\n"
+"  -f <FILTER>   : define bpf filter, for syntax see man page\n";
 
 // program options
 unsigned nworkers = 1;
 std::string nfa_str;
+const char *filter_expr;
 // thread communication
 bool continue_work = true;
 std::mutex mux;
@@ -41,7 +45,7 @@ std::chrono::steady_clock::time_point timepoint;
 
 // gather results
 void sum_up(const std::vector<unsigned long> &data)
-{
+{{{
     static bool first = true;
     mux.lock();
     if (first) {
@@ -54,22 +58,21 @@ void sum_up(const std::vector<unsigned long> &data)
         }
     }
     mux.unlock();
-}
+}}}
 
-void sighandl(int signal) {
+void sighandl(int signal)
+{{{
     std::cout << "\n";
     // stop all work
     continue_work = false;
-}
+}}}
 
 void label_nfa(const NFA &nfa, const std::vector<std::string> &pcaps)
-{
-    unsigned i = 0;
+{{{
     std::vector<unsigned long> data(nfa.state_count());
     std::vector<bool> labeled;
-    START1:
-    try {
-        for ( ; i < pcaps.size(); i++) {
+    for (unsigned i = 0; i < pcaps.size(); i++) {
+        try {
             // just checking how many packets are accepted
             pcapreader::process_payload(
                 pcaps[i].c_str(),
@@ -83,24 +86,25 @@ void label_nfa(const NFA &nfa, const std::vector<std::string> &pcaps)
                     for (size_t i = 0; i < data.size(); i++) {
                         data[i] += labeled[i];
                     }
-                });
+                }, filter_expr);
         }
-    }
-    catch (std::runtime_error &e) {
-        i++;
-        std::cerr << "\033[1;31mWarning:\033[0m " << e.what() << "\n";
-        // process other capture files
-        goto START1;
-    }
-    catch (std::exception &e) {
-        ;
+        catch (std::ios_base::failure &e) {
+            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
+        }
+        catch (std::runtime_error &e) {
+            std::cerr << "\033[1;31mWarning:\033[0m " << e.what() << "\n";
+            // process other capture files
+        }
+        catch (std::exception &e) {
+            break;
+        }
     }
     // sum up results
     sum_up(data);
-}
+}}}
 
 void write_output(std::ostream &out, const NFA &nfa)
-{
+{{{
     auto total = std::max_element(state_labels.begin(), state_labels.end());
     out << "# Total packets : " << *total << std::endl;
     unsigned msec = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -116,9 +120,10 @@ void write_output(std::ostream &out, const NFA &nfa)
         out << state_map[i] << " " << state_labels[i] << " "
             << state_depth[i] << "\n";
     }
-}
+}}}
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{{{
 
     timepoint = std::chrono::steady_clock::now();
     std::string ofname;
@@ -127,7 +132,7 @@ int main(int argc, char **argv) {
     const char *outfile = nullptr;
     int opt_cnt = 1;
     int c;
-    while ((c = getopt(argc, argv, "ho:n:ax")) != -1) {
+    while ((c = getopt(argc, argv, "ho:n:axf:")) != -1) {
         opt_cnt++;
         switch (c) {
             case 'h':
@@ -139,6 +144,10 @@ int main(int argc, char **argv) {
                 break;
             case 'n':
                 nworkers = std::stoi(optarg);
+                opt_cnt++;
+                break;
+            case 'f':
+                filter_expr = optarg;
                 opt_cnt++;
                 break;
             default:
@@ -218,4 +227,4 @@ int main(int argc, char **argv) {
     }
 
     return 0;
-}
+}}}

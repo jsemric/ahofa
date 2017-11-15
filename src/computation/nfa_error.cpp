@@ -32,14 +32,16 @@ const char *helpstr =
 "  -o <FILE>     : specify output file\n"
 "  -a            : compute only accepted packets by TARGET\n"
 "  -n <NWORKERS> : number of workers to run in parallel\n"
-"  -x            : slower but check if REDUCED is really over-approximation\n"
+"  -x            : slower but checks if REDUCED is really over-approximation\n"
 "  -j            : stores the result in JSON format\n"
-"                  of TARGET\n";
+"                  of TARGET\n"
+"  -f <FILTER>   : define bpf filter, for syntax see man page\n";
 
 // program options
 unsigned nworkers = 1;
 bool accepted_only = false;
 bool tojson = false;
+const char *filter_expr;
 // thread communication
 bool continue_work = true;
 std::mutex mux;
@@ -57,28 +59,27 @@ std::chrono::steady_clock::time_point timepoint;
 void sum_up(
     unsigned total, unsigned acc_target,
     unsigned acc_reduced = 0, unsigned different = 0)
-{
+{{{
     mux.lock();
     total_packets += total;
     accepted_target += acc_target;
     accepted_reduced += acc_reduced;
     wrongly_classified += different;
     mux.unlock();
-}
+}}}
 
-void sighandl(int signal) {
+void sighandl(int signal)
+{{{
     std::cout << "\n";
     // stop all work
     continue_work = false;
-}
+}}}
 
 void compute_accepted(const NFA &nfa, const std::vector<std::string> &pcaps)
-{
+{{{
     unsigned total = 0, accepted = 0;
-    unsigned i = 0;
-    START1:
-    try {
-        for ( ; i < pcaps.size(); i++) {
+    for (unsigned i = 0; i < pcaps.size(); i++) {
+        try {
             // just checking how many packets are accepted
             pcapreader::process_payload(
                 pcaps[i].c_str(),
@@ -90,33 +91,33 @@ void compute_accepted(const NFA &nfa, const std::vector<std::string> &pcaps)
                     }
                     total++;
                     accepted += nfa.accept(payload, len);
-                });
+                }, filter_expr);
         }
-    }
-    catch (std::runtime_error &e) {
-        i++;
-        std::cerr << "\033[1;31mWarning:\033[0m " << e.what() << "\n";
-        // process other capture files
-        goto START1;
-    }
-    catch (std::exception &e) {
-        ;
+        catch (std::ios_base::failure &e) {
+            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
+        }
+        catch (std::runtime_error &e) {
+            std::cerr << "\033[1;31mWarning:\033[0m " << e.what() << "\n";
+            // process other capture files, contunue for loop
+        }
+        catch (std::exception &e) {
+            // SIGINT or other error
+            break;
+        }
     }
     // sum up results
     sum_up(total, accepted);
-}
+}}}
 
 void compute_error(
     const NFA &target,
     const NFA &reduced,
     const std::vector<std::string> &pcaps,
     bool fast = true)
-{
+{{{
     unsigned total = 0, acc_target = 0, acc_reduced = 0, different = 0;
-    unsigned i = 0;
-    START2:
-    try {
-        for ( ; i < pcaps.size(); i++) {
+    for (unsigned i = 0; i < pcaps.size(); i++) {
+        try {
             if (fast) {
                 // check only for acceptance of reduced
                 // if is accepted check for acceptance of target
@@ -159,21 +160,23 @@ void compute_error(
                     });
             }
         }
-    }
-    catch (std::runtime_error &e) {
-        i++;
-        std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
-        // process other capture files
-        goto START2;
-    }
-    catch (std::exception &e) {
-        ;
+        catch (std::ios_base::failure &e) {
+            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
+        }
+        catch (std::runtime_error &e) {
+            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
+            // process other capture files
+        }
+        catch (std::exception &e) {
+            ;
+        }
     }
     // sum up results
     sum_up(total, acc_target, acc_reduced, different);
-}
+}}}
 
-void write_output(std::ostream &out) {
+void write_output(std::ostream &out)
+{{{
 
     unsigned msec = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - timepoint).count();
@@ -228,9 +231,10 @@ void write_output(std::ostream &out) {
     out << "Elapsed time        : " << min << "m/" << sec % 60  << "s/"
         << msec % 1000 << "ms\n";
     out << "***************************************************************\n";
-}
+}}}
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{{{
 
     timepoint = std::chrono::steady_clock::now();
     std::string ofname;
@@ -240,7 +244,7 @@ int main(int argc, char **argv) {
     int opt_cnt = 1;
     int c;
     bool fast = true;
-    while ((c = getopt(argc, argv, "ho:n:axj")) != -1) {
+    while ((c = getopt(argc, argv, "ho:n:axjf:")) != -1) {
         opt_cnt++;
         switch (c) {
             case 'h':
@@ -255,6 +259,10 @@ int main(int argc, char **argv) {
                 break;
             case 'n':
                 nworkers = std::stoi(optarg);
+                opt_cnt++;
+                break;
+            case 'f':
+                filter_expr = optarg;
                 opt_cnt++;
                 break;
             case 'x':
@@ -348,4 +356,4 @@ int main(int argc, char **argv) {
     }
 
     return 0;
-}
+}}}
