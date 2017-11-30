@@ -26,8 +26,10 @@ def get_nfa_freq(fname):
     freq = {}
     with open(fname, 'r') as f:
         for line in f:
-            state, fr, *_ = line.split()
-            freq[int(state)] = int(fr)
+            line = line.split('#')[0]
+            if line != '':
+                state, fr, *_ = line.split()
+                freq[int(state)] = int(fr)
 
     return freq
 
@@ -207,7 +209,7 @@ def main():
         # batch file execution variables
         binput = str()
         boutdir = '.'
-        eoutdir = 'data/errors/'
+        errordir = 'data/errors/'
         workers = 1
         pcaps = None
         rename = None
@@ -228,6 +230,8 @@ def main():
                     pcaps = line.split('=')[1].strip()
                 elif line.startswith('workers'):
                     workers = line.split('=')[1].strip()
+                elif line.startswith('errordir'):
+                    errordir = line.split('=')[1].strip()
                 elif line.startswith('rename=yes'):
                     rename = True
                 else:
@@ -235,8 +239,8 @@ def main():
 
         if not os.path.exists(boutdir):
             os.makedirs(boutdir)
-        if not os.path.exists(eoutdir):
-            os.makedirs(eoutdir)
+        if not os.path.exists(errordir):
+            os.makedirs(errordir)
 
         res = []
         for line in buf.split('\n'):
@@ -257,7 +261,7 @@ def main():
             for i in res:
                 sys.stderr.write('Computing error for {}\n'.format(i))
                 output = re.sub('\.fa$', '.json', os.path.basename(i))
-                output = os.path.join(eoutdir, output)
+                output = os.path.join(errordir, output)
                 proc = ['./nfa_error', binput, i, '-o', output,
                     '-n',workers] + list(samples)
                 subprocess.call(proc)
