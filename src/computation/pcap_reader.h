@@ -51,8 +51,6 @@ void process_payload(
     F func, const char *filter = 0,
     unsigned long count = ~0UL);
 
-bool is_pcap_file(const char *capturefile);
-
 std::mutex bpf_compile_mux;
 
 /// Generic function for processing packet payload.
@@ -79,9 +77,11 @@ void process_payload(
     bpf_compile_mux.lock();
     if (filter) {
         if (pcap_compile(pcap, &fp, filter, 0, 0) == -1) {
+            bpf_compile_mux.unlock();
             throw std::runtime_error("cannot parse filter");
         }
         if (pcap_setfilter(pcap, &fp) == -1) {
+            bpf_compile_mux.unlock();
             throw std::runtime_error("cannot install filter");
         }
     }

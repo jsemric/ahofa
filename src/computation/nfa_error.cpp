@@ -40,7 +40,6 @@ const char *helpstr =
 // program options
 unsigned nworkers = 1;
 bool accepted_only = false;
-bool tojson = false;
 const char *filter_expr;
 // thread communication
 bool continue_work = true;
@@ -183,54 +182,44 @@ void write_output(std::ostream &out)
     unsigned sec = msec / 1000 / 1000;
     unsigned min = sec / 60;
     if (accepted_only) {
-        out << "*************************************************************"
-            << "**\n";
-        out << "NFA                 : " << fs::basename(nfa_str1) << "\n";
-        out << "Total packets       : " << total_packets << "\n";
-        out << "Accepted            : " << accepted_target << "\n";
+        out << "{\n";
+        out << "    \"file\"            : \"" << nfa_str1 << "\",\n";
+        out << "    \"nfa\"             : \"" << fs::basename(nfa_str1)
+            << "\",\n";
+        out << "    \"total packets\"   : " << total_packets << ",\n";
+        out << "    \"accepted\"        : " << accepted_target << ",\n";
+        out << "    \"elapsed time\"    : \"" << min << "m/"
+            << sec % 60  << "s/" << msec % 1000 << "ms\"\n";
+        out << "}\n";
     }
     else {
         float err = wrongly_classified * 1.0 / total_packets;
         unsigned long sc1 = target.state_count();
         unsigned long sc2 = reduced.state_count();
 
-        if (tojson) {
-            out << "{\n";
-            out << "    \"target\"              : \"" << fs::basename(nfa_str1)
-                << "\",\n";
-            out << "    \"target states\"       : " << sc1 << ",\n";
-            out << "    \"reduced\"             : \"" << fs::basename(nfa_str2)
-                << "\",\n";
-            out << "    \"reduced states\"       : " << sc2 << ",\n";
-            out << "    \"reduction\"           : " << 1.0 * sc2 / sc1
-                << ",\n";
-            out << "    \"Total packets\"       : " << total_packets << ",\n";
-            out << "    \"Accepted by target\"  : " << accepted_target
-                << ",\n";
-            out << "    \"Accepted by reduced\" : " << accepted_reduced
-                << ",\n";
-            out << "    \"Wrongly classified\"  : " << wrongly_classified
-                << ",\n";
-            out << "    \"Error\"               : " << err << "\n";
-            out << "}\n";
-            return;
-        }
-        out << "*************************************************************"
-            << "**\n";
-        out << "Target              : " << fs::basename(nfa_str1) << "\n";
-        out << "State count         : " << sc1 << "\n";
-        out << "Reduced             : " << fs::basename(nfa_str2) << "\n";
-        out << "State count         : " << sc2 << "\n";
-        out << "Reduction           : " << 1.0 * sc2 / sc1 << "\n";
-        out << "Total packets       : " << total_packets << "\n";
-        out << "Accepted by target  : " << accepted_target << "\n";
-        out << "Accepted by reduced : " << accepted_reduced << "\n";
-        out << "Wrongly classified  : " << wrongly_classified << "\n";
-        out << "Error               : " << err << "\n";
+        out << "{\n";
+        out << "    \"target file\"         : \"" << nfa_str1 << "\",\n";
+        out << "    \"target\"              : \"" << fs::basename(nfa_str1)
+            << "\",\n";
+        out << "    \"target states\"       : " << sc1 << ",\n";
+        out << "    \"file\"                : \"" << nfa_str2 << "\",\n";
+        out << "    \"reduced\"             : \"" << fs::basename(nfa_str2)
+            << "\",\n";
+        out << "    \"reduced states\"      : " << sc2 << ",\n";
+        out << "    \"reduction\"           : " << 1.0 * sc2 / sc1
+            << ",\n";
+        out << "    \"total packets\"       : " << total_packets << ",\n";
+        out << "    \"accepted by target\"  : " << accepted_target
+            << ",\n";
+        out << "    \"accepted by reduced\" : " << accepted_reduced
+            << ",\n";
+        out << "    \"wrongly classified\"  : " << wrongly_classified
+            << ",\n";
+        out << "    \"error\"               : " << err << ",\n";
+        out << "    \"elapsed time\"        : \"" << min << "m/"
+            << sec % 60  << "s/" << msec % 1000 << "ms\"\n";
+        out << "}\n";
     }
-    out << "Elapsed time        : " << min << "m/" << sec % 60  << "s/"
-        << msec % 1000 << "ms\n";
-    out << "***************************************************************\n";
 }}}
 
 int main(int argc, char **argv)
@@ -244,7 +233,7 @@ int main(int argc, char **argv)
     int opt_cnt = 1;
     int c;
     bool fast = true;
-    while ((c = getopt(argc, argv, "ho:n:axjf:")) != -1) {
+    while ((c = getopt(argc, argv, "ho:n:axf:")) != -1) {
         opt_cnt++;
         switch (c) {
             case 'h':
@@ -267,9 +256,6 @@ int main(int argc, char **argv)
                 break;
             case 'x':
                 fast = false;
-                break;
-            case 'j':
-                tojson = true;
                 break;
             default:
                 return 1;

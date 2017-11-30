@@ -7,6 +7,7 @@ import subprocess
 import re
 import datetime
 import glob
+import random
 
 import nfa
 import reductions
@@ -41,22 +42,15 @@ def check_freq(aut, freq):
                 if freq[x] > freq[state] and len(pred[x]) == 1:
                     raise RuntimeError('invalid frequencies')
 
-def generate_output(aut, folder, filename, pars, to_dot, rename=False):
-    now = datetime.datetime.now()
-    basename = '{}-{}{}{}{}.fa'.format(
-        filename, now.year % 100, now.month, now.day, pars)
-    dest = os.path.join(folder, basename)
-
-    if rename and os.path.exists(dest):
-        idx = 0
-        while True:
-            basename = '{}-{}{}{}i{}{}.fa'.format(
-                filename, now.year % 100, now.month, now.day, idx, pars)
-            dest = os.path.join(folder, basename)
-            if os.path.exists(dest):
-                idx+=1
-            else:
-                break
+def generate_output(aut, folder, filename, pars, to_dot):
+    # generating filename
+    while True:
+        # random identifier
+        hsh = ''.join([str(x) for x in random.sample(range(0, 9), 5)])
+        basename = '{}-{}-{}'.format(filename, hsh, pars)
+        dest = os.path.join(folder, basename + '.fa')
+        if not os.path.exists(dest):
+            break
 
     # create file with reduced automaton
     sys.stderr.write('Saving NFA to ' + dest + '\n')
@@ -93,7 +87,8 @@ def execute(args):
         elif args.bfs:
             rtype = 'bfs' + str(args.bfs)
             reductions.prune_bfs(aut, args.bfs)
-        elif args.linear:
+        else:
+#        elif args.linear:
             rtype = 'linear'
             rpar = 'r{}'.format(args.reduction)
             reductions.prune_linear(aut, args.reduction)
@@ -117,12 +112,12 @@ def execute(args):
         if args.output:
             folder = os.path.dirname(args.output)
 
-        par = '-' + args.command
+        par = args.command
         par += '-' + rtype
         par += '-' + rpar if rpar else ''
 
         return generate_output(
-            aut, folder, output, par, args.to_dot, args.rename)
+            aut, folder, output, par, args.to_dot)
     else:
         if args.output:
             with open(args.output, 'w') as out:
@@ -162,10 +157,6 @@ def main():
     general_parser.add_argument(
         '-d','--to-dot', action='store_true',
         help='generate output in dot and jpg format')
-
-    general_parser.add_argument(
-        '-n','--rename', action='store_true',
-        help='renames file if already exists')
 
     # 2 commands for reduction
     subparser = parser.add_subparsers(
@@ -231,6 +222,8 @@ def main():
                     binput = line.split('=')[1].strip()
                 elif line.startswith('outdir'):
                     boutdir = line.split('=')[1].strip() + '/'
+                elif line.startswith('resdir'):
+                    boutdir = line.split('=')[1].strip() + '/'
                 elif line.startswith('pcaps'):
                     pcaps = line.split('=')[1].strip()
                 elif line.startswith('workers'):
@@ -250,9 +243,6 @@ def main():
             try:
                 if line:
                     exe = line.split() + ['-o', str(boutdir), str(binput)]
-                    if rename:
-                        exe.append('--rename')
-
                     sys.stderr.write(' '.join(exe) + '\n')
                     res.append(execute(parser.parse_args(exe)))
             except Exception as e:
@@ -268,7 +258,7 @@ def main():
                 sys.stderr.write('Computing error for {}\n'.format(i))
                 output = re.sub('\.fa$', '.json', os.path.basename(i))
                 output = os.path.join(eoutdir, output)
-                proc = ['./nfa_error', binput, i, '-j', '-o', output,
+                proc = ['./nfa_error', binput, i, '-o', output,
                     '-n',workers] + list(samples)
                 subprocess.call(proc)
 
