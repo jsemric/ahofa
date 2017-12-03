@@ -18,44 +18,52 @@
 #include "nfa.h"
 #include "pcap_reader.h"
 
-#define db(x) std::cerr << x << "\n"
-
 using namespace reduction;
+
 namespace fs = boost::filesystem;
 
 const char *helpstr =
 "Usage: ./nfa_handler [COMMAND] [OPTIONS]\n"
-"Compute an error between 2 NFAs, label NFA or reduce the NFA.\n"
-"TARGET is supposed to be NFA and REDUCED is supposed to be an\n"
-"over-approximation of TARGET. PCAP stands for packet capture file.\n\n"
 "General options:\n"
 "  -h            : show this help and exit\n"
 "  -o <FILE>     : specify output file\n"
 "  -n <NWORKERS> : number of workers to run in parallel\n"
 "  -f <FILTER>   : define bpf filter, for syntax see man page\n"
-"\nCommands:\n"
+"\nCommands:\n\n"
 "Error Computing:\n"
-"Usage: ./nfa_hanler error [OPTIONS] TARGET [REDUCED] PCAPS ...\n"
+"Usage: ./nfa_handlerler error [OPTIONS] TARGET [REDUCED] PCAPS ...\n"
+"Compute an error between 2 NFAs, label NFA or reduce the NFA.\n"
+"TARGET is supposed to be NFA and REDUCED is supposed to be an\n"
+"over-approximation of TARGET. PCAP stands for packet capture file.\n"
 "additional options:\n"
 "  -a            : compute only accepted packets by TARGET\n"
 "  -x            : slower but checks if REDUCED is really over-approximation\n"
 "\nAutomaton Reduction:\n"
 "Usage: ./nfa_hanler reduce [OPTIONS] NFA [PCAPS ...]\n"
 "additional options:\n"
-"  -r <N>        : reduce to %\n"
+"  -e <N>        : specify error, default value is 0.01\n"
+"  -r <N>        : reduce to %, this discards -e option\n"
+"  -t <TYPE>     : specify reduction type, possible choices: prune, ga, armc\n"
 "\nState Labeling\n"
-"Usage: ./nfa_hanler label [OPTIONS] NFA PCAPS ...\n"
-"additional options:\n";
+"Usage: ./nfa_hanler label NFA PCAPS ...\n"
+"Some description. Has no additional options\n";
 
 
-// program options
+// general program options
+std::string cmd = "";
 unsigned nworkers = 1;
-bool accepted_only = false;
 const char *filter_expr;
-bool label = false;
+// nfa error additional options
+bool accepted_only = false;
+// reduction additional options
+const char* reduction_type = "prune";
+float eps = 0.01;
+float reduce_ratio = -1;
+
 // thread communication
 bool continue_work = true;
 std::mutex mux;
+
 // data
 NFA reduced, target;
 std::string nfa_str1, nfa_str2;
@@ -83,7 +91,6 @@ void sum_up(
 
 void sum_up(const std::vector<unsigned long> &data)
 {{{
-    assert(label);
     static bool first = true;
     mux.lock();
     if (first) {
@@ -98,12 +105,18 @@ void sum_up(const std::vector<unsigned long> &data)
     mux.unlock();
 }}}
 
-
 void sighandl(int signal)
 {{{
     std::cout << "\n";
     // stop all work
     continue_work = false;
+}}}
+
+void reduce(const NFA &nfa, const std::vector<std::string> &pcaps)
+{{{
+    // TODO
+    (void)nfa;
+    (void)pcaps;
 }}}
 
 void label_nfa(const NFA &nfa, const std::vector<std::string> &pcaps)
@@ -249,7 +262,7 @@ void write_output(std::ostream &out)
     unsigned sec = msec / 1000 / 1000;
     unsigned min = sec / 60;
 
-    if (label) {
+    if (cmd == "label") {
         auto total = std::max_element(state_labels.begin(), state_labels.end());
         out << "# Total packets : " << *total << std::endl;
     
@@ -304,6 +317,15 @@ void write_output(std::ostream &out)
     }
 }}}
 
+void check_float(float x, float max_val = 1, float min_val = 0) {
+    if (x > max_val || x < min_val) {
+        throw std::runtime_error(
+            "invalid float value: \"" + std::to_string(x) +
+            "\", should be in range (" + std::to_string(min_val) + "," +
+            std::to_string(max_val) + ")");
+    }
+}
+
 int main(int argc, char **argv)
 {{{
 
@@ -312,42 +334,88 @@ int main(int argc, char **argv)
     std::vector<std::string> pcaps;
 
     const char *outfile = nullptr;
-    int opt_cnt = 1;
+    int opt_cnt = 2;    // program name + command
     int c;
     bool fast = true;
-    while ((c = getopt(argc, argv, "ho:n:axf:l")) != -1) {
-        opt_cnt++;
-        switch (c) {
-            case 'h':
-                fprintf(stderr, "%s", helpstr);
-                return 0;
-            case 'a':
-                accepted_only = true;
-                break;
-            case 'o':
-                outfile = optarg;
-                opt_cnt++;
-                break;
-            case 'n':
-                nworkers = std::stoi(optarg);
-                opt_cnt++;
-                break;
-            case 'f':
-                filter_expr = optarg;
-                opt_cnt++;
-                break;
-            case 'x':
-                fast = false;
-                break;
-            case 'l':
-                label = true;
-                break;
-            default:
-                return 1;
-        }
-    }
+    bool reduce_options_set = false;
+    bool error_options_set = false;    
 
     try {
+        if (argc > 1) {
+            cmd = argv[1];
+            if (cmd == "--help" || cmd == "-h") {
+                std::cerr << helpstr;
+                return 0;
+            }
+            // check if command is valid
+            if (cmd != "error" && cmd != "reduce" && cmd != "label") {
+                throw std::runtime_error("invalid command: \"" + cmd + "\"");
+            }
+        } 
+        else {
+            std::cerr << helpstr;
+            return 1;
+        }
+
+        while ((c = getopt(argc, argv, "ho:n:axf:e:r:t:")) != -1) {
+            opt_cnt++;
+            switch (c) {
+                // general options
+                case 'h':
+                    std::cerr << helpstr;
+                    return 0;
+                case 'o':
+                    outfile = optarg;
+                    opt_cnt++;
+                    break;
+                case 'n':
+                    nworkers = std::stoi(optarg);
+                    opt_cnt++;
+                    break;
+                case 'f':
+                    filter_expr = optarg;
+                    opt_cnt++;
+                    break;
+                // error additional options
+                case 'x':
+                    error_options_set = 1;
+                    fast = false;
+                    break;
+                case 'a':
+                    error_options_set = 1;
+                    accepted_only = true;
+                    break;
+                // reduction additional options
+                case 'e':
+                    opt_cnt++;
+                    reduce_options_set = 1;
+                    eps = std::stod(optarg);
+                    check_float(eps);
+                    break;
+                case 'r':
+                    opt_cnt++;
+                    reduce_options_set = 1;
+                    reduce_ratio = std::stod(optarg);
+                    check_float(reduce_ratio);
+                    break;
+                case 't':
+                    opt_cnt++;
+                    reduce_options_set = 1;
+                    reduction_type = optarg;
+                    break;
+                default:
+                    return 1;
+            }
+        }
+        // resolve conflict options
+        if ((cmd == "reduce" && error_options_set) ||
+            (cmd == "error" && reduce_options_set) ||
+            (cmd == "label" && reduce_options_set) ||
+            (cmd == "label" && error_options_set))
+        {
+            throw std::runtime_error("invalid combinations of arguments");
+        }
+
         if (nworkers <= 0 ||
             nworkers >= std::thread::hardware_concurrency())
         {
@@ -355,12 +423,22 @@ int main(int argc, char **argv)
                 "invalid number of cores \"" + std::to_string(nworkers) + "\"");
         }
 
-        // checking a number of arguments
-        if (argc - opt_cnt < 3 - accepted_only)
-        {
-            fprintf(stderr, "Error: invalid arguments\n%s", helpstr);
-            return 1;
+        // checking the number of positional arguments
+        int min_pos_cnt = 2;
+        if (cmd == "error") {
+            min_pos_cnt = 3 - accepted_only;    
         }
+
+        if (argc - opt_cnt < min_pos_cnt)
+        {
+            throw std::runtime_error("invalid positional arguments");
+        }
+
+        /*
+        for (int i = opt_cnt; i <= argc; i++) {
+            std::cout << argv[i] << "\n";
+        }
+        */
 
         // get automata
         nfa_str1 = argv[opt_cnt];
@@ -373,6 +451,7 @@ int main(int argc, char **argv)
         // get capture files
         for (int i = opt_cnt + 2 - accepted_only; i < argc; i++) {
             pcaps.push_back(argv[i]);
+            // std::cerr << argv[i] << "\n";
         }
 
         // check output file
@@ -398,8 +477,12 @@ int main(int argc, char **argv)
         for (unsigned i = 0; i < nworkers; i++) {
             threads.push_back(std::thread{[&v, i, &fast]()
                     {
-                        if (label) {
+                        if (cmd == "label") {
                             label_nfa(target, v[i]);
+                        }
+                        else if (cmd == "reduce") {
+                            // TODO
+                            reduce(target, v[i]);
                         }
                         else {
                             if (accepted_only) {

@@ -29,3 +29,16 @@ std::string int_to_hex(const unsigned num)
     sprintf(buf, "0x%.2x", num);
     return buf;
 }
+
+
+void print_readable(const unsigned char *payload, unsigned length) {
+    for (unsigned i = 0; i < length; i++) {
+        if (isprint(payload[i])) {
+            printf("%c", payload[i]);
+        }
+        else {
+            printf("\\x%.2x", payload[i]);
+        }
+    }
+    printf("\n");
+}

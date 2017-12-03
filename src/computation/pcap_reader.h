@@ -200,16 +200,4 @@ inline const unsigned char *get_payload(
     return packet + offset;
 }
 
-void print_readable(const unsigned char *payload, unsigned length) {
-    for (unsigned i = 0; i < length; i++) {
-        if (isprint(payload[i])) {
-            printf("%c", payload[i]);
-        }
-        else {
-            printf("\\x%.2x", payload[i]);
-        }
-    }
-    printf("\n");
-}
-
 }  // end of namespace

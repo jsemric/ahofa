@@ -4,8 +4,7 @@ all: $(SUBDIR)
 
 $(SUBDIR):
 	$(MAKE) -C $@
-	cp $(SUBDIR)/nfa_error .
-	cp $(SUBDIR)/label_nfa .
+	cp $(SUBDIR)/nfa_handler .
 
 clean:
 	rm -f nfa_error

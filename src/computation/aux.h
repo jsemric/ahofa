@@ -19,3 +19,5 @@ bool is_number(const std::string& s);
 int hex_to_int(const std::string &str);
 
 std::string int_to_hex(const unsigned num);
+
+void print_readable(const unsigned char *payload, unsigned length);
