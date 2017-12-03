@@ -6,8 +6,7 @@
 /// Unless otherwise stated, all code is licensed under a
 /// GNU General Public Licence v2.0
 
-#ifndef __pcap_reader_h
-#define __pcap_reader_h
+#pragma once
 
 #include <fstream>
 #include <iostream>
@@ -195,8 +194,6 @@ inline const unsigned char *get_payload(
     } while (cond);
 
     if (offset > header->caplen) {
-        // TODO write packet to log file
-        // beware of a shared access, use mutex
         return packet + header->caplen;
     }
 
@@ -216,5 +213,3 @@ void print_readable(const unsigned char *payload, unsigned length) {
 }
 
 }  // end of namespace
-
-#endif

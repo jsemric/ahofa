@@ -20,10 +20,11 @@
 
 #define db(x) std::cerr << x << "\n"
 
+using namespace reduction;
 namespace fs = boost::filesystem;
 
 const char *helpstr =
-"Usage: ./nfa_error [OPTIONS] TARGET [REDUCED] PCAP ...\n"
+"Usage: ./nfa_handler [OPTIONS] TARGET [REDUCED] PCAP ...\n"
 "Compute an error between 2 NFAs.\n"
 "TARGET is supposed to be NFA and REDUCED is supposed to be an\n"
 "over-approximation of TARGET. PCAP stands for packet capture file.\n\n"
@@ -41,6 +42,7 @@ const char *helpstr =
 unsigned nworkers = 1;
 bool accepted_only = false;
 const char *filter_expr;
+bool label = false;
 // thread communication
 bool continue_work = true;
 std::mutex mux;
@@ -51,6 +53,8 @@ unsigned total_packets = 0;
 unsigned accepted_target = 0;
 unsigned accepted_reduced = 0;
 unsigned wrongly_classified = 0;
+// labeling data
+std::vector<unsigned long> state_labels;
 // time statistics
 std::chrono::steady_clock::time_point timepoint;
 
@@ -63,15 +67,69 @@ void sum_up(
     total_packets += total;
     accepted_target += acc_target;
     accepted_reduced += acc_reduced;
-    wrongly_classified += different;
+    wrongly_classified += different;    
     mux.unlock();
 }}}
+
+void sum_up(const std::vector<unsigned long> &data)
+{{{
+    assert(label);
+    static bool first = true;
+    mux.lock();
+    if (first) {
+        state_labels = std::vector<unsigned long>(data);
+        first = false;
+    }
+    else {
+        for (size_t i = 0; i < state_labels.size(); i++) {
+            state_labels[i] += data[i];
+        }
+    }
+    mux.unlock();
+}}}
+
 
 void sighandl(int signal)
 {{{
     std::cout << "\n";
     // stop all work
     continue_work = false;
+}}}
+
+void label_nfa(const NFA &nfa, const std::vector<std::string> &pcaps)
+{{{
+    std::vector<unsigned long> data(nfa.state_count());
+    std::vector<bool> labeled;
+    for (unsigned i = 0; i < pcaps.size(); i++) {
+        try {
+            // just checking how many packets are accepted
+            pcapreader::process_payload(
+                pcaps[i].c_str(),
+                [&] (const unsigned char *payload, unsigned len)
+                {
+                    if (continue_work == false) {
+                        // SIGINT caught in parent, sum up and exit
+                        throw std::exception();
+                    }
+                    nfa.label_states(payload, len, labeled);
+                    for (size_t i = 0; i < data.size(); i++) {
+                        data[i] += labeled[i];
+                    }
+                }, filter_expr);
+        }
+        catch (std::ios_base::failure &e) {
+            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
+        }
+        catch (std::runtime_error &e) {
+            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
+            // process other capture files
+        }
+        catch (std::exception &e) {
+            break;
+        }
+    }
+    // sum up results
+    sum_up(data);
 }}}
 
 void compute_accepted(const NFA &nfa, const std::vector<std::string> &pcaps)
@@ -176,12 +234,26 @@ void compute_error(
 
 void write_output(std::ostream &out)
 {{{
-
     unsigned msec = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - timepoint).count();
     unsigned sec = msec / 1000 / 1000;
     unsigned min = sec / 60;
-    if (accepted_only) {
+
+    if (label) {
+        auto total = std::max_element(state_labels.begin(), state_labels.end());
+        out << "# Total packets : " << *total << std::endl;
+    
+        out << "# Elapsed time  : " << min << "m/" << sec % 60  << "s/"
+            << msec % 1000 << "ms\n";
+
+        auto state_map = target.get_rmap();
+        auto state_depth = target.get_states_depth();
+        for (unsigned long i = 0; i < target.state_count(); i++) {
+            out << state_map[i] << " " << state_labels[i] << " "
+                << state_depth[i] << "\n";
+        }
+    }
+    else if (accepted_only) {
         out << "{\n";
         out << "    \"file\"            : \"" << nfa_str1 << "\",\n";
         out << "    \"nfa\"             : \"" << fs::basename(nfa_str1)
@@ -233,7 +305,7 @@ int main(int argc, char **argv)
     int opt_cnt = 1;
     int c;
     bool fast = true;
-    while ((c = getopt(argc, argv, "ho:n:axf:")) != -1) {
+    while ((c = getopt(argc, argv, "ho:n:axf:l")) != -1) {
         opt_cnt++;
         switch (c) {
             case 'h':
@@ -256,6 +328,9 @@ int main(int argc, char **argv)
                 break;
             case 'x':
                 fast = false;
+                break;
+            case 'l':
+                label = true;
                 break;
             default:
                 return 1;
@@ -313,11 +388,16 @@ int main(int argc, char **argv)
         for (unsigned i = 0; i < nworkers; i++) {
             threads.push_back(std::thread{[&v, i, &fast]()
                     {
-                        if (accepted_only) {
-                            compute_accepted(target, v[i]);
+                        if (label) {
+                            label_nfa(target, v[i]);
                         }
                         else {
-                            compute_error(target, reduced, v[i], fast);
+                            if (accepted_only) {
+                                compute_accepted(target, v[i]);
+                            }
+                            else {
+                                compute_error(target, reduced, v[i], fast);
+                            }
                         }
                     }
                 });

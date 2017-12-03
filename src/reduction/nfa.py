@@ -212,46 +212,6 @@ class Nfa:
         # remove state
         del self._transitions[qstate]
 
-
-
-    ###########################################################################
-    # LANGUAGE OPERATIONS
-    ###########################################################################
-
-    def forward_language_equivalence(self, state1, state2, n):
-
-        if n == 0:
-            return True
-
-        # same symbols
-        if len(self._transitions[state1]) != len(self._transitions[state2]):
-            return False
-
-        for symbol, states in self._transitions[state1]:
-            if symbol in self._transitions[state2]:
-                for p1 in states:
-                    ret = False
-                    for p2 in self._transitions[state2][symbol]:
-                        if forward_language_equivavelnce(p1, p2, n - 1):
-                            ret = True
-                            break
-                    if ret == False:
-                        return False
-            else:
-                return False
-
-        return True
-
-    def forward_language_equivalence_groups(self, n):
-        eq_groups = {}
-        for p1 in range(self.state_count):
-            eq_groups[p1] = set([p1])
-            for p2 in range(p1, self.state_count):
-                if (forward_language_equivalence(self, p1, p2, n)):
-                    eq_groups[p1].add(p2)
-
-        return eq_groups
-
     ###########################################################################
     # IO METHODS
     ###########################################################################

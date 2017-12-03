@@ -1,89 +1,158 @@
 /// @author Jakub Semric
-///
-/// Probabilistic automaton template class definition and methods.
-/// @file pdfa.h
-///
-/// Unless otherwise stated, all code is licensed under a
-/// GNU General Public Licence v2.0
+/// 2017
 
-#ifndef __nfa_h
-#define __nfa_h
+#pragma once
 
 #include <iostream>
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <set>
 #include <exception>
 #include <cassert>
 #include <stdio.h>
 #include <ctype.h>
 
+#include "aux.h"
+
+namespace reduction {
+
+// transitions serialization format
+using TransFormat = Triple<std::string, std::string, std::string>;
+// string vector
 using StrVec = std::vector<std::string>;
+using Symbol = uint8_t;
+using State = unsigned long;
+// since we use only packets words can only consist of bytes
+using Word = const unsigned char*;
 
-template <typename T1, typename T2, typename T3>
-struct Triple
+class GeneralNFA
 {
-    T1 first;
-    T2 second;
-    T3 third;
+protected:
+    std::set<State> final_states;
+    State initial_state;
+    StrVec state_rmap;
 
-    Triple() = default;
-    Triple(T1 t1, T2 t2, T3 t3) : first{t1}, second{t2}, third{t3} {};
+    virtual unsigned long state_count() const = 0;
+    virtual void set_transitions(
+        const std::vector<TransFormat> &trans,
+        const std::map<std::string, State> &state_map) = 0;
+
+    virtual void set_final_states(
+        const std::vector<std::string> &finals,
+        const std::map<std::string, State> &state_map) = 0;
+
+    virtual void set_initial_state(
+        const std::string &init,
+        const std::map<std::string, State> &state_map) = 0;
+
+public:
+    GeneralNFA() : initial_state{0} {}
+    virtual ~GeneralNFA() {}
+
+    virtual StrVec read_from_file(std::ifstream &input);
+    virtual StrVec read_from_file(const char *input);
+    virtual bool accept(const Word word, unsigned length) const = 0;
 };
 
-/// Template class for NFA.
-class NFA
+
+/// Faster manipulation with transitions as in NFA2 class.
+/// This class should be used only for computing state frequencies or computing
+/// the number of accepted words. No modification of states and rules after 
+/// initialization is recommended.
+class NFA : public GeneralNFA
 {
 private:
     /// state + symbol = set of states
-    std::vector<std::vector<unsigned long>> transitions;
-    std::set<unsigned long> final_states;
-    unsigned long initial_state;
-    unsigned long state_max;
-    std::vector<unsigned long> state_freq;
-    std::vector<bool> visited_states;
-    StrVec state_rmap;
+    /// faster then map, however harder to modify
+    std::vector<std::vector<State>> transitions;
+    State state_max;
 
     static const unsigned shift = 8;
     static const unsigned alph_size = 256;
 
+    virtual void set_transitions(
+        const std::vector<TransFormat> &trans,
+        const std::map<std::string, State> &state_map) override;
+    virtual void set_final_states(
+        const std::vector<std::string> &finals,
+        const std::map<std::string, State> &state_map) override;
+    virtual void set_initial_state(
+        const std::string &init,
+        const std::map<std::string, State> &state_map) override
+    {
+        initial_state = state_map.at(init);
+    }
+
 public:
-    NFA();
-    ~NFA();
+    NFA() : GeneralNFA{} {}
+    ~NFA() {}
 
-    template<typename U>
-    inline bool accept(const U word, unsigned length) const;
-
-    template<typename U>
-    inline void compute_frequency(const U word, unsigned length);
-
-    template<typename U>
-    inline void label_states(const U word, unsigned length);
-
-    template<typename U>
+    inline bool accept(Word word, unsigned length) const;
     inline void label_states(
-        const U word, unsigned length, std::vector<bool> &labeled) const;
+        Word word, unsigned length, std::vector<bool> &labeled) const;
 
     void print(std::ostream &out = std::cout, bool usemap = true) const;
-    void print_freq(std::ostream &out = std::cout, bool usemap = true) const;
-    StrVec read_from_file(std::ifstream &input);
-    StrVec read_from_file(const char *input);
     void compute_depth();
-    unsigned long state_count() const { return state_max + 1; }
+
+    virtual unsigned long state_count() const override {return state_max + 1;}
     std::vector<unsigned> get_states_depth() const;
     StrVec get_rmap() const { return state_rmap; }
-
-private:
-    void update_freq() noexcept;
 };
 
-template<typename U>
-inline bool NFA::accept(const U word, unsigned length) const
+class NFA2 : public GeneralNFA
 {
-    std::set<unsigned long> actual{initial_state};
+private:
+    //                 state          rules:     symbol  -> states 
+    std::unordered_map<State, std::unordered_map<Symbol, std::set<State>>>
+    transitions;
+
+    virtual void set_transitions(
+        const std::vector<TransFormat> &trans,
+        const std::map<std::string, State> &state_map) override;
+    virtual void set_final_states(
+        const std::vector<std::string> &finals,
+        const std::map<std::string, State> &state_map) override;
+    virtual void set_initial_state(
+        const std::string &init,
+        const std::map<std::string, State> &state_map) override
+    {
+        (void)state_map;
+        initial_state = std::stoi(init);
+    }
+
+public:
+    NFA2() : GeneralNFA{} {}
+    ~NFA2() {}
+
+    virtual unsigned long state_count() const override {
+        return transitions.size();
+    }
+
+    inline bool is_state(State state) const {
+        return transitions.find(state) != transitions.end();
+    }
+    inline bool is_final(State state) const {
+        return final_states.find(state) != final_states.end();
+    }
+
+    std::map<State,std::set<State>> pred() const;
+    std::map<State,std::set<State>> succ() const;
+    void merge_states(std::map<State,State> &mapping);
+
+    inline bool accept(Word word, unsigned length) const;
+};
+
+//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+// inline methods implementation of NFA class
+//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+inline bool NFA::accept(Word word, unsigned length) const
+{
+    std::set<State> actual{initial_state};
 
     for (unsigned i = 0; i < length && !actual.empty(); i++) {
-        std::set<unsigned long> tmp;
+        std::set<State> next;
         for (auto j : actual) {
             assert ((j << shift) + word[j] < transitions.size());
             auto trans = transitions[(j << shift) + word[i]];
@@ -92,91 +161,64 @@ inline bool NFA::accept(const U word, unsigned length) const
                     if (final_states.find(k) != final_states.end()) {
                         return true;
                     }
-                    tmp.insert(k);
+                    next.insert(k);
                 }
             }
         }
-        actual = std::move(tmp);
+        actual = std::move(next);
     }
 
     return false;
 }
 
-template<typename U>
 inline void NFA::label_states(
-        const U word, unsigned length, std::vector<bool> &labeled) const
+    const Word word, unsigned length, std::vector<bool> &labeled) const
 {
-    std::set<unsigned long> actual{initial_state};
+    std::set<State> actual{initial_state};
     labeled = std::vector<bool>(state_max);
     labeled[initial_state] = true;
 
     for (unsigned i = 0; i < length; i++) {
-        std::set<unsigned long> tmp;
+        std::set<State> next;
         for (auto j : actual) {
             assert ((j << shift) + word[j] < transitions.size());
             auto trans = transitions[(j << shift) + word[i]];
             if (!trans.empty()) {
                 for (auto k : trans) {
                     labeled[k] = true;
-                    tmp.insert(k);
+                    next.insert(k);
                 }
             }
         }
-        actual = std::move(tmp);
+        actual = std::move(next);
     }
 }
 
-template<typename U>
-inline void NFA::label_states(const U word, unsigned length)
-{
-    std::set<unsigned long> actual{initial_state};
+//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+// inline methods implementation of NFA2 class
+//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    for (unsigned i = 0; i < length; i++) {
-        std::set<unsigned long> tmp;
+inline bool NFA2::accept(const Word word, unsigned length) const
+{
+    std::set<State> actual{initial_state};
+
+    for (unsigned i = 0; i < length && !actual.empty(); i++) {
+        std::set<State> next;
         for (auto j : actual) {
-            assert ((j << shift) + word[j] < transitions.size());
-            auto trans = transitions[(j << shift) + word[i]];
+            auto trans = transitions.at(j).at(word[i]);
             if (!trans.empty()) {
                 for (auto k : trans) {
-                    visited_states[k] = true;
-                    tmp.insert(k);
+                    if (final_states.find(k) != final_states.end()) {
+                        return true;
+                    }
+                    next.insert(k);
                 }
             }
         }
-        actual = std::move(tmp);
+        actual = std::move(next);
     }
 
-    update_freq();
+    return false;
 }
 
-template<typename U>
-inline void NFA::compute_frequency(const U word, unsigned length)
-{
-    std::set<unsigned long> actual{initial_state};
-
-    for (unsigned i = 0; i < length; i++) {
-        std::set<unsigned long> tmp;
-        for (auto j : actual) {
-            assert ((j << shift) + word[j] < transitions.size());
-            auto trans = transitions[(j << shift) + word[i]];
-            if (!trans.empty()) {
-                for (auto k : trans) {
-                    state_freq[k]++;
-                    tmp.insert(k);
-                }
-            }
-        }
-        actual = std::move(tmp);
-    }
-}
-
-inline void NFA::update_freq() noexcept
-{
-    for (size_t i = 0; i <= state_max; i++) {
-        state_freq[i] += visited_states[i];
-        visited_states[i] = false;
-    }
-    state_freq[initial_state]++;
-}
-
-#endif
+}   // end of namespace reduction
