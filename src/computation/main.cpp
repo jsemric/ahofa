@@ -24,19 +24,29 @@ using namespace reduction;
 namespace fs = boost::filesystem;
 
 const char *helpstr =
-"Usage: ./nfa_handler [OPTIONS] TARGET [REDUCED] PCAP ...\n"
-"Compute an error between 2 NFAs.\n"
+"Usage: ./nfa_handler [COMMAND] [OPTIONS]\n"
+"Compute an error between 2 NFAs, label NFA or reduce the NFA.\n"
 "TARGET is supposed to be NFA and REDUCED is supposed to be an\n"
 "over-approximation of TARGET. PCAP stands for packet capture file.\n\n"
-"options:\n"
+"General options:\n"
 "  -h            : show this help and exit\n"
 "  -o <FILE>     : specify output file\n"
-"  -a            : compute only accepted packets by TARGET\n"
 "  -n <NWORKERS> : number of workers to run in parallel\n"
+"  -f <FILTER>   : define bpf filter, for syntax see man page\n"
+"\nCommands:\n"
+"Error Computing:\n"
+"Usage: ./nfa_hanler error [OPTIONS] TARGET [REDUCED] PCAPS ...\n"
+"additional options:\n"
+"  -a            : compute only accepted packets by TARGET\n"
 "  -x            : slower but checks if REDUCED is really over-approximation\n"
-"  -j            : stores the result in JSON format\n"
-"                  of TARGET\n"
-"  -f <FILTER>   : define bpf filter, for syntax see man page\n";
+"\nAutomaton Reduction:\n"
+"Usage: ./nfa_hanler reduce [OPTIONS] NFA [PCAPS ...]\n"
+"additional options:\n"
+"  -r <N>        : reduce to %\n"
+"\nState Labeling\n"
+"Usage: ./nfa_hanler label [OPTIONS] NFA PCAPS ...\n"
+"additional options:\n";
+
 
 // program options
 unsigned nworkers = 1;
