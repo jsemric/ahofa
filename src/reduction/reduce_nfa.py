@@ -12,13 +12,6 @@ import random
 import nfa
 import reductions
 
-def reduction_result(previous_states, current_states):
-    sys.stderr.write(
-        '{}/{} {:0.2f}%\n'.format(
-            current_states, previous_states,
-            current_states * 100 / previous_states)
-        )
-
 def reduce(reduction_function, args):
     reduction_function(*args)
 
@@ -262,7 +255,7 @@ def main():
                 sys.stderr.write('Computing error for {}\n'.format(i))
                 output = re.sub('\.fa$', '.json', os.path.basename(i))
                 output = os.path.join(errordir, output)
-                proc = ['./nfa_error', binput, i, '-o', output,
+                proc = ['./nfa_handler', 'error', binput , i, '-o', output,
                     '-n',workers] + list(samples)
                 subprocess.call(proc)
 

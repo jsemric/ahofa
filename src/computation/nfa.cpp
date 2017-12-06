@@ -14,10 +14,11 @@
 using namespace reduction;
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-// implementation of NFA class methods
+// implementation of GeneralNfa class methods
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-StrVec GeneralNFA::read_from_file(const char *input) {
+StrVec GeneralNfa::read_from_file(const char *input)
+{
     std::ifstream in{input};
     if (!in.is_open()) {
         throw std::runtime_error("error loading NFA");
@@ -27,7 +28,7 @@ StrVec GeneralNFA::read_from_file(const char *input) {
     return res;
 }
 
-StrVec GeneralNFA::read_from_file(std::ifstream &input)
+StrVec GeneralNfa::read_from_file(std::ifstream &input)
 {
     bool no_final = true;
     std::string buf, init;
@@ -83,7 +84,29 @@ StrVec GeneralNFA::read_from_file(std::ifstream &input)
     return state_rmap;
 }
 
-void NFA::set_transitions(
+void GeneralNfa::set_initial_state(
+    const std::string &init,
+    const std::map<std::string, State> &state_map)
+{
+    (void)state_map;
+    initial_state = std::stoi(init);
+}
+
+void GeneralNfa::set_final_states(
+    const std::vector<std::string> &finals,
+    const std::map<std::string, State> &state_map)
+{
+    (void)state_map;
+    for (auto i : finals) {
+        final_states.insert(std::stoi(i));
+    }
+}
+
+//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+// implementation of FastNfa class methods
+//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+void FastNfa::set_transitions(
     const std::vector<TransFormat> &trans,
     const std::map<std::string, State> &state_map)
 {
@@ -100,7 +123,7 @@ void NFA::set_transitions(
     }
 }
 
-void NFA::set_final_states(
+void FastNfa::set_final_states(
     const std::vector<std::string> &finals,
     const std::map<std::string, State> &state_map)
 {
@@ -110,7 +133,7 @@ void NFA::set_final_states(
 }
 
 
-void NFA::print(std::ostream &out, bool usemap) const
+void FastNfa::print(std::ostream &out, bool usemap) const
 {
     auto fmap = [this, &usemap](unsigned int x) {
         return usemap ? this->state_rmap[x] : std::to_string(x);
@@ -135,7 +158,7 @@ void NFA::print(std::ostream &out, bool usemap) const
     }
 }
 
-std::vector<unsigned> NFA::get_states_depth() const
+std::vector<unsigned> FastNfa::get_states_depth() const
 {
     std::vector<unsigned> state_depth(state_max + 1);
     std::set<unsigned long> actual{initial_state};
@@ -163,36 +186,34 @@ std::vector<unsigned> NFA::get_states_depth() const
     return state_depth;
 }
 
-//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-// implementation of NFA2 class methods
-//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-void NFA2::set_final_states(
-    const std::vector<std::string> &finals,
-    const std::map<std::string, State> &state_map)
+std::map<State,std::string> FastNfa::get_rules() const
 {
-    (void)state_map;
-    for (auto i : finals) {
-        final_states.insert(std::stoi(i));
-    }
+    std::map<State, std::string> ret;
+    return ret;
 }
 
-void NFA2::set_transitions(
+//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+// implementation of Nfa class methods
+//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+void Nfa::set_transitions(
     const std::vector<TransFormat> &trans,
     const std::map<std::string, State> &state_map)
-{   
+{
     (void)state_map;
     for (auto i : trans) {
         // XXX unsafe
         State pstate = std::stoi(i.first);
-        Symbol symbol = hex_to_int(i.second);
-        State qstate = std::stoi(i.third);
+        State qstate = std::stoi(i.second);
+        Symbol symbol = hex_to_int(i.third);
         transitions[pstate][symbol].insert(qstate);
+        transitions[qstate];
+        //std::cerr << i.first << " " << i.second << " " << qstate << "\n";
     }
 }
 
 /// Compute predeceasing states of all states.
-std::map<State,std::set<State>> NFA2::pred() const
+std::map<State,std::set<State>> Nfa::pred() const
 {
     std::map<State,std::set<State>> ret;
     for (auto i : transitions) {
@@ -206,7 +227,7 @@ std::map<State,std::set<State>> NFA2::pred() const
 }
 
 /// Compute succeeding states of all states.
-std::map<State,std::set<State>> NFA2::succ() const
+std::map<State,std::set<State>> Nfa::succ() const
 {
     std::map<State,std::set<State>> ret;
     for (auto i : transitions) {
@@ -219,41 +240,43 @@ std::map<State,std::set<State>> NFA2::succ() const
     return ret;
 }
 
-void NFA2::merge_states(std::map<State,State> &mapping)
+void Nfa::merge_states(const std::map<State,State> &mapping)
 {
     // verify mapping
     for (auto i : mapping) {
-        if (is_state(i.first) || is_state(i.second) || initial_state == i.first)
+        if (!is_state(i.first) || !is_state(i.second) ||
+            initial_state == i.first)
         {
             throw std::runtime_error("cannot merge states");
         }
     }
 
-    // complete the mapping with self-mapping states
-    for (auto i : transitions) {
-        if (mapping.find(i.first) == mapping.end()) {
-            mapping[i.first] = i.first;
-        }
-    }
-
-    std::set<State> new_final_states;
-
     // redirect transitions from removed states
+    // merge i.first to i.second
     for (auto i : mapping) {
-        if (i.second == i.first) {
+        State merged_state = i.first;
+        State src_state = i.second;
+        if (merged_state == src_state) {
+            // senseless merging state to itself
             continue;
         }
-        State src_state = i.second;
-        for (auto j : transitions[i.first]) {
-            Symbol symbol = j.first;
-            for (auto state : j.second) {
-                transitions[src_state][symbol].insert(state);
+
+        if (!is_final(src_state)) {
+            // final states have implicit self-loop over the input alphabet
+            // no reason to redirect transitions
+            for (auto j : transitions[merged_state]) {
+                Symbol symbol = j.first;
+                set_union(transitions[src_state][symbol], j.second);
+            }
+
+            if (is_final(merged_state)) {
+                std::cerr << i.first << " " << i.second << "\n";
+                final_states.erase(merged_state);
+                final_states.insert(src_state);
             }
         }
-        transitions.erase(i.first);
-        if (is_final(i.first)) {
-            new_final_states.insert(src_state);
-        }
+        // remove state and its transitions
+        transitions.erase(merged_state);
     }
 
     // redirect transitions to removed states
@@ -261,11 +284,95 @@ void NFA2::merge_states(std::map<State,State> &mapping)
         for (auto &rules : states.second) {
             std::set<State> new_states;
             for (auto i : rules.second) {
-                new_states.insert(mapping[i]);
+                auto a = mapping.find(i);
+                State s = a != mapping.end() ? a->second : i;
+                new_states.insert(s);
             }
             rules.second = std::move(new_states);
         }
     }
 
-    final_states = new_final_states;
+    clear_final_state_transitions();
+}
+
+std::map<State,State> Nfa::get_paths() const
+{
+    std::set<State> visited{initial_state};
+    std::map<State,State> ret;
+    // states which cannot be merged
+    ret[initial_state] = initial_state;
+    // find state with self-loop to self
+    for (auto i : transitions.at(initial_state)) {
+        bool cond  = true;
+        for (auto j : i.second) {
+            if (has_selfloop_to_self(j)) {
+                visited.insert(j);
+                ret[j] = initial_state;
+                cond = false;
+                break;
+            }
+        }
+        if (cond == false) {
+            break;
+        }
+    }
+    
+    auto pr = pred();
+    for (auto f : final_states) {
+        ret[f] = f;
+        std::set<State> actual = pr[f];
+        while (!actual.empty()) {
+            std::set<State> next;
+            set_union(visited, actual);
+            for (auto i : actual) {
+                ret[i] = f;
+                for (auto j : pr[i]) {
+                    if (visited.find(j) == visited.end()) {
+                        next.insert(j);
+                    }
+                }
+            }
+            actual = std::move(next);
+        }
+    }
+
+    return ret;
+}
+
+void Nfa::print(std::ostream &out) const
+{
+    out << initial_state << "\n";
+
+    for (auto i : transitions) {
+        for (auto j : i.second) {
+            for (auto k : j.second) {
+                out << i.first << " " << k << " " << int_to_hex(j.first)
+                    << "\n";
+            }
+        }
+    }
+    
+    for (auto i : final_states) {
+        out << i << "\n";
+    }
+}
+
+bool Nfa::has_selfloop_to_self(State s) const
+{
+    int cnt = 0;
+    for (auto i : transitions.at(s)) {
+        cnt++;
+        if (i.second.find(s) == i.second.end()) {
+           return false;
+        }
+    }
+
+    return cnt == 256;
+}
+
+void Nfa::clear_final_state_transitions()
+{
+    for (auto i : final_states) {
+        transitions[i].clear();
+    }
 }

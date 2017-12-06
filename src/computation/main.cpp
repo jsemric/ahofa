@@ -1,7 +1,8 @@
-#pragma GCC diagnostic ignored "-Wunused-parameter"
+//#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include <iostream>
 #include <ostream>
+#include <sstream>
 #include <exception>
 #include <vector>
 #include <csignal>
@@ -17,6 +18,9 @@
 
 #include "nfa.h"
 #include "pcap_reader.h"
+#include "reduction.h"
+
+#define db(x) std::cerr << x << "\n"
 
 using namespace reduction;
 
@@ -35,11 +39,8 @@ const char *helpstr =
 "Compute an error between 2 NFAs, label NFA or reduce the NFA.\n"
 "TARGET is supposed to be NFA and REDUCED is supposed to be an\n"
 "over-approximation of TARGET. PCAP stands for packet capture file.\n"
-"additional options:\n"
-"  -a            : compute only accepted packets by TARGET\n"
-"  -x            : slower but checks if REDUCED is really over-approximation\n"
 "\nAutomaton Reduction:\n"
-"Usage: ./nfa_hanler reduce [OPTIONS] NFA [PCAPS ...]\n"
+"Usage: ./nfa_hanler reduce [OPTIONS] NFA [PCAPS | NFA_STATES]\n"
 "additional options:\n"
 "  -e <N>        : specify error, default value is 0.01\n"
 "  -r <N>        : reduce to %, this discards -e option\n"
@@ -53,10 +54,9 @@ const char *helpstr =
 std::string cmd = "";
 unsigned nworkers = 1;
 const char *filter_expr;
-// nfa error additional options
-bool accepted_only = false;
+
 // reduction additional options
-const char* reduction_type = "prune";
+std::string reduction_type = "prune";
 float eps = 0.01;
 float reduce_ratio = -1;
 
@@ -64,33 +64,41 @@ float reduce_ratio = -1;
 bool continue_work = true;
 std::mutex mux;
 
-// data
-NFA reduced, target;
+// common data
+FastNfa target, reduced;
+FastNfa &nfa = target;
 std::string nfa_str1, nfa_str2;
+
+// error computing data
+std::vector<size_t> final_state_ids;
+
 unsigned total_packets = 0;
 unsigned accepted_target = 0;
 unsigned accepted_reduced = 0;
 unsigned wrongly_classified = 0;
+
 // labeling data
 std::vector<unsigned long> state_labels;
 // time statistics
 std::chrono::steady_clock::time_point timepoint;
 
 // gather results
+/*
 void sum_up(
     unsigned total, unsigned acc_target,
     unsigned acc_reduced = 0, unsigned different = 0)
-{{{
+{
     mux.lock();
     total_packets += total;
     accepted_target += acc_target;
     accepted_reduced += acc_reduced;
     wrongly_classified += different;    
     mux.unlock();
-}}}
+}
+*/
 
 void sum_up(const std::vector<unsigned long> &data)
-{{{
+{
     static bool first = true;
     mux.lock();
     if (first) {
@@ -103,61 +111,107 @@ void sum_up(const std::vector<unsigned long> &data)
         }
     }
     mux.unlock();
-}}}
+}
 
 void sighandl(int signal)
-{{{
+{
     std::cout << "\n";
     // stop all work
     continue_work = false;
-}}}
+}
 
-void reduce(const NFA &nfa, const std::vector<std::string> &pcaps)
-{{{
+std::map<State, unsigned long> read_state_labels(
+    const Nfa &nfa, const std::string &fname)
+{
+    std::map<State, unsigned long> ret;
+    std::ifstream in{fname};
+    if (!in.is_open()) {
+        throw std::runtime_error("error loading NFA");
+    }
+
+    std::string buf;
+    while (std::getline(in, buf)) {
+        // remove '#' comment
+        buf = buf.substr(0, buf.find("#"));
+        if (buf == "") {
+            continue;
+        }
+        std::istringstream iss(buf);
+        State s;
+        unsigned long l, d;
+        if (!(iss >> s >> l >> d)) {
+            throw std::runtime_error("invalid state labels syntax");
+        }
+        if (!nfa.is_state(s)) {
+            throw std::runtime_error("invalid NFA state: " + std::to_string(s));
+        }
+        ret[s] = l;
+    }
+    in.close();
+    return ret;
+}
+
+
+void reduce(const std::string &nfa_arg, const std::vector<std::string> &args)
+{
+    Nfa nfa;
+    nfa.read_from_file(nfa_arg.c_str());
+
     // TODO
-    (void)nfa;
-    (void)pcaps;
-}}}
+    if (reduction_type == "prune") {
+        auto labels = read_state_labels(nfa, args[0]);
+        prune(nfa, labels);
+    }
+    else {
+        ;
+    }
+}
 
-void label_nfa(const NFA &nfa, const std::vector<std::string> &pcaps)
-{{{
-    std::vector<unsigned long> data(nfa.state_count());
-    std::vector<bool> labeled;
-    for (unsigned i = 0; i < pcaps.size(); i++) {
-        try {
-            // just checking how many packets are accepted
-            pcapreader::process_payload(
-                pcaps[i].c_str(),
-                [&] (const unsigned char *payload, unsigned len)
-                {
-                    if (continue_work == false) {
-                        // SIGINT caught in parent, sum up and exit
-                        throw std::exception();
-                    }
-                    nfa.label_states(payload, len, labeled);
-                    for (size_t i = 0; i < data.size(); i++) {
-                        data[i] += labeled[i];
-                    }
-                }, filter_expr);
-        }
-        catch (std::ios_base::failure &e) {
-            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
-        }
-        catch (std::runtime_error &e) {
-            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
-            // process other capture files
-        }
-        catch (std::exception &e) {
-            break;
+void compute_error(
+    std::vector<unsigned long> &rules, const unsigned char *payload,
+    unsigned plen)
+{
+    // TODO
+    std::vector<bool> bm(reduced.state_count());
+    reduced.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
+    bool match = false;
+    for (size_t i = 0; i < final_state_ids.size(); i++) {
+        size_t idx = final_state_ids[i];
+        if (bm[idx]) {
+            match = true;
+            rules[idx]++;
         }
     }
-    // sum up results
-    sum_up(data);
-}}}
 
-void compute_accepted(const NFA &nfa, const std::vector<std::string> &pcaps)
-{{{
-    unsigned total = 0, accepted = 0;
+    if (match) {
+        // something was matched, lets find the difference
+        std::vector<bool> bm(target.state_count());
+        size_t target_offset = reduced.state_count();
+        target.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
+        for (size_t i = 0; i < final_state_ids.size(); i++) {
+            size_t idx = final_state_ids[i];
+            rules[idx + target_offset] += bm[idx];
+        }
+    }
+}
+
+void label_states(
+     std::vector<unsigned long> &reached_states, const unsigned char *payload,
+     unsigned plen)
+{
+    std::vector<bool> bm(nfa.state_count());
+    nfa.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
+    for (size_t i = 0; i < reached_states.size(); i++) {
+        reached_states[i] += bm[i];
+    }
+}
+
+template<typename Handler>
+void process_pcaps(
+    const std::vector<std::string> &pcaps, size_t data_size, Handler handler)
+{
+    // local reach of the states
+    std::vector<unsigned long> data(data_size);
     for (unsigned i = 0; i < pcaps.size(); i++) {
         try {
             // just checking how many packets are accepted
@@ -169,13 +223,14 @@ void compute_accepted(const NFA &nfa, const std::vector<std::string> &pcaps)
                         // SIGINT caught in parent, sum up and exit
                         throw std::exception();
                     }
-                    total++;
-                    accepted += nfa.accept(payload, len);
+                    // specific payload handler
+                    handler(data, payload, len);
+
                 }, filter_expr);
         }
         catch (std::ios_base::failure &e) {
             std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
-            // process other capture files, contunue for loop
+            // process other capture files, continue for loop
         }
         catch (std::runtime_error &e) {
             std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
@@ -186,77 +241,11 @@ void compute_accepted(const NFA &nfa, const std::vector<std::string> &pcaps)
         }
     }
     // sum up results
-    sum_up(total, accepted);
-}}}
-
-void compute_error(
-    const NFA &target,
-    const NFA &reduced,
-    const std::vector<std::string> &pcaps,
-    bool fast = true)
-{{{
-    unsigned total = 0, acc_target = 0, acc_reduced = 0, different = 0;
-    for (unsigned i = 0; i < pcaps.size(); i++) {
-        try {
-            if (fast) {
-                // check only for acceptance of reduced
-                // if is accepted check for acceptance of target
-                // reduced supposes to be an over-approximation
-                pcapreader::process_payload(
-                    pcaps[i].c_str(),
-                    [&] (const unsigned char *payload, unsigned len)
-                    {
-                        if (continue_work == false) {
-                            // SIGINT caught in parent, sum up and exit
-                            throw std::exception();
-                        }
-                        total++;
-                        if (reduced.accept(payload, len)) {
-                            acc_reduced++;
-                            if (target.accept(payload, len)) {
-                                acc_target++;
-                            }
-                            else {
-                                different++;
-                            }
-                        }
-                    });
-            }
-            else {
-                pcapreader::process_payload(
-                    pcaps[i].c_str(),
-                    [&] (const unsigned char *payload, unsigned len)
-                    {
-                        if (continue_work == false) {
-                            // SIGINT caught in parent, sum up and exit
-                            throw std::exception();
-                        }
-                        total++;
-                        bool b1 = reduced.accept(payload, len);
-                        bool b2 = target.accept(payload, len);
-                        acc_reduced += b1;
-                        acc_target += b2;
-                        different += b1 != b2;
-                    });
-            }
-        }
-        catch (std::ios_base::failure &e) {
-            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
-        }
-        catch (std::runtime_error &e) {
-            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
-            // process other capture files
-        }
-        catch (std::exception &e) {
-            break;
-        }
-    }
-    // sum up results
-    sum_up(total, acc_target, acc_reduced, different);
-}}}
+    sum_up(data);
+}
 
 void write_output(std::ostream &out)
-{{{
+{
     unsigned msec = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - timepoint).count();
     unsigned sec = msec / 1000 / 1000;
@@ -276,18 +265,7 @@ void write_output(std::ostream &out)
                 << state_depth[i] << "\n";
         }
     }
-    else if (accepted_only) {
-        out << "{\n";
-        out << "    \"file\"            : \"" << nfa_str1 << "\",\n";
-        out << "    \"nfa\"             : \"" << fs::basename(nfa_str1)
-            << "\",\n";
-        out << "    \"total packets\"   : " << total_packets << ",\n";
-        out << "    \"accepted\"        : " << accepted_target << ",\n";
-        out << "    \"elapsed time\"    : \"" << min << "m/"
-            << sec % 60  << "s/" << msec % 1000 << "ms\"\n";
-        out << "}\n";
-    }
-    else {
+    else if (cmd == "error") {
         float err = wrongly_classified * 1.0 / total_packets;
         unsigned long sc1 = target.state_count();
         unsigned long sc2 = reduced.state_count();
@@ -315,9 +293,15 @@ void write_output(std::ostream &out)
             << sec % 60  << "s/" << msec % 1000 << "ms\"\n";
         out << "}\n";
     }
-}}}
+    else if (cmd == "reduce") {
+        std::cerr << "Elapsed time :" << min << "m/" << sec % 60  << "s/"
+            << msec % 1000 << "ms\n";
+        nfa.print(out);
+    }
+}
 
-void check_float(float x, float max_val = 1, float min_val = 0) {
+void check_float(float x, float max_val = 1, float min_val = 0) 
+{
     if (x > max_val || x < min_val) {
         throw std::runtime_error(
             "invalid float value: \"" + std::to_string(x) +
@@ -327,8 +311,7 @@ void check_float(float x, float max_val = 1, float min_val = 0) {
 }
 
 int main(int argc, char **argv)
-{{{
-
+{
     timepoint = std::chrono::steady_clock::now();
     std::string ofname;
     std::vector<std::string> pcaps;
@@ -336,9 +319,7 @@ int main(int argc, char **argv)
     const char *outfile = nullptr;
     int opt_cnt = 2;    // program name + command
     int c;
-    bool fast = true;
     bool reduce_options_set = false;
-    bool error_options_set = false;    
 
     try {
         if (argc > 1) {
@@ -376,15 +357,6 @@ int main(int argc, char **argv)
                     filter_expr = optarg;
                     opt_cnt++;
                     break;
-                // error additional options
-                case 'x':
-                    error_options_set = 1;
-                    fast = false;
-                    break;
-                case 'a':
-                    error_options_set = 1;
-                    accepted_only = true;
-                    break;
                 // reduction additional options
                 case 'e':
                     opt_cnt++;
@@ -408,10 +380,8 @@ int main(int argc, char **argv)
             }
         }
         // resolve conflict options
-        if ((cmd == "reduce" && error_options_set) ||
-            (cmd == "error" && reduce_options_set) ||
-            (cmd == "label" && reduce_options_set) ||
-            (cmd == "label" && error_options_set))
+        if ((cmd == "error" && reduce_options_set) ||
+            (cmd == "label" && reduce_options_set))
         {
             throw std::runtime_error("invalid combinations of arguments");
         }
@@ -424,10 +394,7 @@ int main(int argc, char **argv)
         }
 
         // checking the number of positional arguments
-        int min_pos_cnt = 2;
-        if (cmd == "error") {
-            min_pos_cnt = 3 - accepted_only;    
-        }
+        int min_pos_cnt = cmd == "error" ? 3 : 2;
 
         if (argc - opt_cnt < min_pos_cnt)
         {
@@ -443,15 +410,15 @@ int main(int argc, char **argv)
         // get automata
         nfa_str1 = argv[opt_cnt];
         target.read_from_file(nfa_str1.c_str());
-        if (!accepted_only) {
+        if (cmd == "error") {
             nfa_str2 = argv[opt_cnt + 1];
             reduced.read_from_file(nfa_str2.c_str());
         }
 
         // get capture files
-        for (int i = opt_cnt + 2 - accepted_only; i < argc; i++) {
+        for (int i = opt_cnt + 1/*2 - accepted_only*/; i < argc; i++) {
             pcaps.push_back(argv[i]);
-            // std::cerr << argv[i] << "\n";
+            //std::cerr << argv[i] << "\n";
         }
 
         // check output file
@@ -463,42 +430,48 @@ int main(int argc, char **argv)
             }
         }
 
-        // signal handling
-        std::signal(SIGINT, sighandl);
-
         // divide work
         std::vector<std::vector<std::string>> v(nworkers);
         for (unsigned i = 0; i < pcaps.size(); i++) {
             v[i % nworkers].push_back(pcaps[i]);
         }
 
-        std::vector<std::thread> threads;
-        // start computation
-        for (unsigned i = 0; i < nworkers; i++) {
-            threads.push_back(std::thread{[&v, i, &fast]()
-                    {
-                        if (cmd == "label") {
-                            label_nfa(target, v[i]);
-                        }
-                        else if (cmd == "reduce") {
-                            // TODO
-                            reduce(target, v[i]);
-                        }
-                        else {
-                            if (accepted_only) {
-                                compute_accepted(target, v[i]);
-                            }
-                            else {
-                                compute_error(target, reduced, v[i], fast);
-                            }
-                        }
-                    }
-                });
+        size_t data_size = nfa.state_count();
+        // do some preparation for commands `label` and `error`
+        if (cmd == "error") {
+            // TODO
+            data_size += reduced.state_count();
+        }
+        else if (cmd == "label") {
+            // TODO
         }
 
-        for (unsigned i = 0; i < nworkers; i++) {
-            if (threads[i].joinable()) {
-                threads[i].join();
+        // start computation
+        if (cmd == "reduce") {
+            reduce(nfa_str1, pcaps);
+        }
+        else {
+            // signal handling
+            std::signal(SIGINT, sighandl);
+
+            std::vector<std::thread> threads;
+            for (unsigned i = 0; i < nworkers; i++) {
+                threads.push_back(std::thread{[&v, i, data_size]()
+                        {
+                            if (cmd == "label") {
+                                process_pcaps(v[i], data_size, label_states);
+                            }
+                            else {
+                                process_pcaps(v[i], data_size, compute_error);
+                            }
+                        }
+                    });
+            }
+
+            for (unsigned i = 0; i < nworkers; i++) {
+                if (threads[i].joinable()) {
+                    threads[i].join();
+                }
             }
         }
 
@@ -516,4 +489,4 @@ int main(int argc, char **argv)
     }
 
     return 0;
-}}}
+}

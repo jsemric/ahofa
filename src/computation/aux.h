@@ -1,6 +1,8 @@
 #pragma once
 
 #include <iostream>
+#include <set>
+
 
 template <typename T1, typename T2, typename T3>
 struct Triple
@@ -21,3 +23,15 @@ int hex_to_int(const std::string &str);
 std::string int_to_hex(const unsigned num);
 
 void print_readable(const unsigned char *payload, unsigned length);
+
+template<typename T>
+void set_union(std::set<T> &s1, const std::set<T> &s2);
+
+// implementation
+
+template<typename T>
+void set_union(std::set<T> &s1, const std::set<T> &s2) {
+    for (auto i : s2) {
+        s1.insert(i);
+    }
+}

@@ -128,7 +128,7 @@ class Nfa:
 
         return not sum(alph)
 
-    def lightweight_minimization(self, collapse_finals=True):
+    def lightweight_minimization(self, collapse_finals=False):
         '''
         TODO Add comment.
         '''
