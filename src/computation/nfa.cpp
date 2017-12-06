@@ -14,21 +14,20 @@
 using namespace reduction;
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-// implementation of GeneralNfa class methods
+// implementation of Nfa class methods
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-StrVec GeneralNfa::read_from_file(const char *input)
+void Nfa::read_from_file(const char *input)
 {
     std::ifstream in{input};
     if (!in.is_open()) {
         throw std::runtime_error("error loading NFA");
     }
-    auto res = read_from_file(in);
+    read_from_file(in);
     in.close();
-    return res;
 }
 
-StrVec GeneralNfa::read_from_file(std::ifstream &input)
+void Nfa::read_from_file(std::ifstream &input)
 {
     bool no_final = true;
     std::string buf, init;
@@ -38,7 +37,8 @@ StrVec GeneralNfa::read_from_file(std::ifstream &input)
 
     // reading initial state
     std::getline(input, init);
-    state_set.insert(init);
+    // setting initial state
+    set_initial_state(init);
 
     // reading transitions
     while (std::getline(input, buf)) {
@@ -49,158 +49,35 @@ StrVec GeneralNfa::read_from_file(std::ifstream &input)
             break;
         }
         trans.push_back(TransFormat{s1, s2, a});
-
-        state_set.insert(s1);
-        state_set.insert(s2);
     }
-
-    state_rmap = StrVec(state_set.size());
-    // mapping states
-    unsigned long state_count = 0;
-    for (auto i : state_set) {
-        state_rmap[state_count] = i;
-        state_map[i] = state_count++;
-    }
-
-    // setting initial state
-    set_initial_state(init, state_map);
-    //initial_state = state_map[init];
-
     // setting transitions
-    set_transitions(trans, state_map);
+    set_transitions(trans);
 
     // set final states
     std::vector<std::string> finals;
     if (!no_final) {
         do {
-            if (state_map.find(buf) != state_map.end()) {
-                finals.push_back(buf);
-            }
+            finals.push_back(buf);
         } while (std::getline(input, buf));
     }
-    set_final_states(finals, state_map);
 
-    // return reversed mapping of the states
-    return state_rmap;
+    set_final_states(finals);
 }
 
-void GeneralNfa::set_initial_state(
-    const std::string &init,
-    const std::map<std::string, State> &state_map)
+void Nfa::set_initial_state(const std::string &init)
 {
-    (void)state_map;
     initial_state = std::stoi(init);
 }
 
-void GeneralNfa::set_final_states(
-    const std::vector<std::string> &finals,
-    const std::map<std::string, State> &state_map)
+void Nfa::set_final_states(const std::vector<std::string> &finals)
 {
-    (void)state_map;
     for (auto i : finals) {
         final_states.insert(std::stoi(i));
     }
 }
 
-//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-// implementation of FastNfa class methods
-//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-void FastNfa::set_transitions(
-    const std::vector<TransFormat> &trans,
-    const std::map<std::string, State> &state_map)
+void Nfa::set_transitions(const std::vector<TransFormat> &trans)
 {
-    // initializing transitions
-    state_max = state_map.size() - 1;
-    transitions = std::vector<std::vector<unsigned long>>(
-        state_map.size()*alph_size);
-
-    for (auto i : trans) {
-        unsigned long idx = (state_map.at(i.first) << shift) +
-            hex_to_int(i.third);
-        assert (idx < transitions.size());
-        transitions[idx].push_back(state_map.at(i.second));
-    }
-}
-
-void FastNfa::set_final_states(
-    const std::vector<std::string> &finals,
-    const std::map<std::string, State> &state_map)
-{
-    for (auto i : finals) {
-        final_states.insert(state_map.at(i));
-    }
-}
-
-
-void FastNfa::print(std::ostream &out, bool usemap) const
-{
-    auto fmap = [this, &usemap](unsigned int x) {
-        return usemap ? this->state_rmap[x] : std::to_string(x);
-    };
-
-    out << this->initial_state << "\n";
-
-    for (unsigned long i = 0; i <= state_max; i++) {
-        size_t idx = i << shift;
-        for (unsigned j = 0; j < alph_size; j++) {
-            if (!transitions[idx + j].empty()) {
-                for (auto k : transitions[idx + j]) {
-                    out << fmap(i) << " " << fmap(k) << " " << int_to_hex(j)
-                        << "\n";
-                }
-            }
-        }
-    }
-
-    for (auto i : final_states) {
-        out << fmap(i) << "\n";
-    }
-}
-
-std::vector<unsigned> FastNfa::get_states_depth() const
-{
-    std::vector<unsigned> state_depth(state_max + 1);
-    std::set<unsigned long> actual{initial_state};
-    std::set<unsigned long> all{initial_state};
-    unsigned cnt = 1;
-
-    while (not actual.empty()) {
-        std::set<unsigned long> new_gen;
-        for (auto i : actual) {
-            size_t seg = i << shift;
-            for (size_t j = seg; j < seg + 256; j++) {
-                for (auto k : transitions[j]) {
-                    if (all.find(k) == all.end()) {
-                        all.insert(k);
-                        new_gen.insert(k);
-                        state_depth[k] = cnt;
-                    }
-                }
-            }
-        }
-        actual = std::move(new_gen);
-        cnt++;
-    }
-
-    return state_depth;
-}
-
-std::map<State,std::string> FastNfa::get_rules() const
-{
-    std::map<State, std::string> ret;
-    return ret;
-}
-
-//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-// implementation of Nfa class methods
-//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-void Nfa::set_transitions(
-    const std::vector<TransFormat> &trans,
-    const std::map<std::string, State> &state_map)
-{
-    (void)state_map;
     for (auto i : trans) {
         // XXX unsafe
         State pstate = std::stoi(i.first);
@@ -375,4 +252,53 @@ void Nfa::clear_final_state_transitions()
     for (auto i : final_states) {
         transitions[i].clear();
     }
+}
+
+//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+// implementation of FastNfa class methods
+//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+void FastNfa::build()
+{
+    // map states
+    State cnt = 0;
+    for (auto i : transitions) {
+        state_map[i.first] = cnt++;
+    }
+
+    trans_vector = std::vector<std::vector<State>>(state_count() * alph_size);
+    for (auto i : transitions) {
+        size_t idx_state = state_map[i.first] << shift;
+        for (auto j : i.second) {
+            size_t symbol = j.first;
+            for (auto state : j.second) {
+                assert(idx_state + symbol < trans_vector.size());
+                trans_vector[idx_state + symbol].push_back(state_map[state]);
+            }
+        }
+    }
+}
+
+void FastNfa::read_from_file(std::ifstream &input)
+{
+    Nfa::read_from_file(input);
+    build();
+}
+
+std::map<State,State> FastNfa::get_reversed_state_map() const
+{
+    std::map<State,State> ret;
+    for (auto i : state_map) {
+        ret[i.second] = i.first;
+    }
+    return ret;
+}
+
+std::vector<State> FastNfa::get_final_state_idx() const
+{
+    std::vector<State> ret;
+    for (auto i : final_states) {
+        ret.push_back(state_map.at(i));
+    }
+    return ret;
 }

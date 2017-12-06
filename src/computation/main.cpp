@@ -1,3 +1,6 @@
+/// @author Jakub Semric
+/// 2017
+
 //#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include <iostream>
@@ -5,6 +8,7 @@
 #include <sstream>
 #include <exception>
 #include <vector>
+#include <map>
 #include <csignal>
 #include <stdexcept>
 #include <ctime>
@@ -25,6 +29,32 @@
 using namespace reduction;
 
 namespace fs = boost::filesystem;
+
+struct Data {
+    // long data
+    std::vector<size_t> vector_data1;
+    std::vector<size_t> vector_data2;
+    // packets statistics
+    size_t total;
+    size_t accepted_reduced;
+    size_t accepted_target;
+
+    Data(size_t data_size1 = 1, size_t data_size2 = 1) :
+        vector_data1(data_size1), vector_data2(data_size2) {}
+    ~Data() = default;
+
+    void aggregate(const Data &other_data) {
+        total += other_data.total;
+        accepted_target += other_data.accepted_target;
+        accepted_reduced += other_data.accepted_reduced;
+        for (size_t i = 0; i < other_data.vector_data1.size(); i++) {
+            vector_data1[i] += other_data.vector_data1[i];
+        }
+        for (size_t i = 0; i < other_data.vector_data2.size(); i++) {
+            vector_data2[i] += other_data.vector_data2[i];
+        }
+    }
+};
 
 const char *helpstr =
 "Usage: ./nfa_handler [COMMAND] [OPTIONS]\n"
@@ -65,20 +95,17 @@ bool continue_work = true;
 std::mutex mux;
 
 // common data
+Data all_data;
 FastNfa target, reduced;
 FastNfa &nfa = target;
 std::string nfa_str1, nfa_str2;
 
 // error computing data
-std::vector<size_t> final_state_ids;
+std::vector<size_t> final_state_idx1;
+std::vector<size_t> final_state_idx2;
+std::map<State,State> state_map1;
+std::map<State,State> state_map2;
 
-unsigned total_packets = 0;
-unsigned accepted_target = 0;
-unsigned accepted_reduced = 0;
-unsigned wrongly_classified = 0;
-
-// labeling data
-std::vector<unsigned long> state_labels;
 // time statistics
 std::chrono::steady_clock::time_point timepoint;
 
@@ -97,19 +124,10 @@ void sum_up(
 }
 */
 
-void sum_up(const std::vector<unsigned long> &data)
+void sum_up(const Data &data)
 {
-    static bool first = true;
     mux.lock();
-    if (first) {
-        state_labels = std::vector<unsigned long>(data);
-        first = false;
-    }
-    else {
-        for (size_t i = 0; i < state_labels.size(); i++) {
-            state_labels[i] += data[i];
-        }
-    }
+    all_data.aggregate(data);
     mux.unlock();
 }
 
@@ -167,51 +185,50 @@ void reduce(const std::string &nfa_arg, const std::vector<std::string> &args)
     }
 }
 
-void compute_error(
-    std::vector<unsigned long> &rules, const unsigned char *payload,
-    unsigned plen)
+void compute_error(Data &data, const unsigned char *payload, unsigned plen)
 {
-    // TODO
     std::vector<bool> bm(reduced.state_count());
     reduced.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
     bool match = false;
-    for (size_t i = 0; i < final_state_ids.size(); i++) {
-        size_t idx = final_state_ids[i];
+    for (size_t i = 0; i < final_state_idx1.size(); i++) {
+        size_t idx = final_state_idx1[i];
         if (bm[idx]) {
             match = true;
-            rules[idx]++;
+            data.vector_data1[idx]++;
         }
     }
 
     if (match) {
+        data.accepted_reduced++;
+        match = false;
         // something was matched, lets find the difference
         std::vector<bool> bm(target.state_count());
-        size_t target_offset = reduced.state_count();
         target.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
-        for (size_t i = 0; i < final_state_ids.size(); i++) {
-            size_t idx = final_state_ids[i];
-            rules[idx + target_offset] += bm[idx];
+        for (size_t i = 0; i < final_state_idx2.size(); i++) {
+            size_t idx = final_state_idx2[i];
+            if (bm[idx]) {
+                match = true;
+                data.vector_data2[idx]++;
+            }
         }
+        data.accepted_target += match;
     }
 }
 
 void label_states(
-     std::vector<unsigned long> &reached_states, const unsigned char *payload,
-     unsigned plen)
+     Data &reached_states, const unsigned char *payload, unsigned plen)
 {
     std::vector<bool> bm(nfa.state_count());
     nfa.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
-    for (size_t i = 0; i < reached_states.size(); i++) {
-        reached_states[i] += bm[i];
+    for (size_t i = 0; i < reached_states.vector_data1.size(); i++) {
+        reached_states.vector_data1[i] += bm[i];
     }
 }
 
 template<typename Handler>
 void process_pcaps(
-    const std::vector<std::string> &pcaps, size_t data_size, Handler handler)
+    const std::vector<std::string> &pcaps, Data &local_data, Handler handler)
 {
-    // local reach of the states
-    std::vector<unsigned long> data(data_size);
     for (unsigned i = 0; i < pcaps.size(); i++) {
         try {
             // just checking how many packets are accepted
@@ -224,7 +241,8 @@ void process_pcaps(
                         throw std::exception();
                     }
                     // specific payload handler
-                    handler(data, payload, len);
+                    local_data.total++;
+                    handler(local_data, payload, len);
 
                 }, filter_expr);
         }
@@ -240,8 +258,9 @@ void process_pcaps(
             break;
         }
     }
+    db(4);
     // sum up results
-    sum_up(data);
+    sum_up(local_data);
 }
 
 void write_output(std::ostream &out)
@@ -252,21 +271,30 @@ void write_output(std::ostream &out)
     unsigned min = sec / 60;
 
     if (cmd == "label") {
-        auto total = std::max_element(state_labels.begin(), state_labels.end());
-        out << "# Total packets : " << *total << std::endl;
+        out << "# Total packets : " << all_data.total << std::endl;
     
         out << "# Elapsed time  : " << min << "m/" << sec % 60  << "s/"
             << msec % 1000 << "ms\n";
 
-        auto state_map = target.get_rmap();
-        auto state_depth = target.get_states_depth();
+        auto state_map = nfa.get_reversed_state_map();
+        //auto state_depth = target.get_states_depth();
         for (unsigned long i = 0; i < target.state_count(); i++) {
-            out << state_map[i] << " " << state_labels[i] << " "
-                << state_depth[i] << "\n";
+            out << state_map[i] << " " << all_data.vector_data1[i] << "\n";
         }
     }
     else if (cmd == "error") {
-        float err = wrongly_classified * 1.0 / total_packets;
+        size_t matches1 = 0, matches2 = 0;
+        for (auto i : all_data.vector_data1) {
+            matches1 += i;
+        }
+        for (auto i : all_data.vector_data2) {
+            matches2 += i;
+        }
+        size_t wrongly_classified =  all_data.accepted_reduced - 
+            all_data.accepted_target;
+
+        float err = wrongly_classified * 1.0 / all_data.total;
+        float err2 = (matches1 - matches2) * 1.0 / all_data.total;
         unsigned long sc1 = target.state_count();
         unsigned long sc2 = reduced.state_count();
 
@@ -281,14 +309,16 @@ void write_output(std::ostream &out)
         out << "    \"reduced states\"      : " << sc2 << ",\n";
         out << "    \"reduction\"           : " << 1.0 * sc2 / sc1
             << ",\n";
-        out << "    \"total packets\"       : " << total_packets << ",\n";
-        out << "    \"accepted by target\"  : " << accepted_target
+        out << "    \"total packets\"       : " << all_data.total << ",\n";
+        out << "    \"accepted by target\"  : " << all_data.accepted_target
             << ",\n";
-        out << "    \"accepted by reduced\" : " << accepted_reduced
+        out << "    \"accepted by reduced\" : " << all_data.accepted_reduced
             << ",\n";
-        out << "    \"wrongly classified\"  : " << wrongly_classified
-            << ",\n";
+        out << "    \"wrongly classified\"  : " << wrongly_classified << ",\n";
         out << "    \"error\"               : " << err << ",\n";
+        out << "    \"reduced matches\"     : " << matches1 << ",\n";
+        out << "    \"target matches\"      : " << matches2 << ",\n";
+        out << "    \"matches error\"       : " << err2 << ",\n";
         out << "    \"elapsed time\"        : \"" << min << "m/"
             << sec % 60  << "s/" << msec % 1000 << "ms\"\n";
         out << "}\n";
@@ -410,9 +440,22 @@ int main(int argc, char **argv)
         // get automata
         nfa_str1 = argv[opt_cnt];
         target.read_from_file(nfa_str1.c_str());
+        size_t size1 = nfa.state_count(), size2 = 1;
+        // do some preparation for commands `label` and `error`
         if (cmd == "error") {
+            // TODO
+            size1 = reduced.state_count();
+            size2 = target.state_count();
             nfa_str2 = argv[opt_cnt + 1];
             reduced.read_from_file(nfa_str2.c_str());
+            final_state_idx1 = reduced.get_final_state_idx();
+            final_state_idx2 = target.get_final_state_idx();
+            state_map1 = reduced.get_reversed_state_map();
+            state_map2 = target.get_reversed_state_map();
+            opt_cnt++;
+        }
+        else if (cmd == "label") {
+            // TODO
         }
 
         // get capture files
@@ -436,16 +479,6 @@ int main(int argc, char **argv)
             v[i % nworkers].push_back(pcaps[i]);
         }
 
-        size_t data_size = nfa.state_count();
-        // do some preparation for commands `label` and `error`
-        if (cmd == "error") {
-            // TODO
-            data_size += reduced.state_count();
-        }
-        else if (cmd == "label") {
-            // TODO
-        }
-
         // start computation
         if (cmd == "reduce") {
             reduce(nfa_str1, pcaps);
@@ -453,16 +486,19 @@ int main(int argc, char **argv)
         else {
             // signal handling
             std::signal(SIGINT, sighandl);
+            all_data = Data(size1, size2);
 
             std::vector<std::thread> threads;
             for (unsigned i = 0; i < nworkers; i++) {
-                threads.push_back(std::thread{[&v, i, data_size]()
+                threads.push_back(std::thread{[&v, i, size1, size2]()
                         {
+                            Data local_data(size1, size2);
+
                             if (cmd == "label") {
-                                process_pcaps(v[i], data_size, label_states);
+                                process_pcaps(v[i], local_data, label_states);
                             }
                             else {
-                                process_pcaps(v[i], data_size, compute_error);
+                                process_pcaps(v[i], local_data, compute_error);
                             }
                         }
                     });
