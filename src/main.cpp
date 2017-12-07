@@ -88,8 +88,8 @@ const char *filter_expr;
 
 // reduction additional options
 std::string reduction_type = "prune";
-float eps = 0.01;
-float reduce_ratio = -1;
+float eps = -1;
+float reduce_ratio = 0.01;
 
 // thread communication
 bool continue_work = true;
@@ -144,8 +144,8 @@ std::map<State, unsigned long> read_state_labels(
         }
         std::istringstream iss(buf);
         State s;
-        unsigned long l, d;
-        if (!(iss >> s >> l >> d)) {
+        unsigned long l;
+        if (!(iss >> s >> l)) {
             throw std::runtime_error("invalid state labels syntax");
         }
         if (!nfa.is_state(s)) {
@@ -163,7 +163,7 @@ void reduce(const std::vector<std::string> &args)
     // TODO
     if (reduction_type == "prune") {
         auto labels = read_state_labels(nfa, args[0]);
-        prune(nfa, labels);
+        prune(nfa, labels, reduce_ratio, eps);
     }
     else {
         ;
@@ -331,7 +331,7 @@ void write_output(std::ostream &out)
         out << "}\n";
     }
     else if (cmd == "reduce") {
-        std::cerr << "Elapsed time :" << min << "m/" << sec % 60  << "s/"
+        std::cerr << "Elapsed time : " << min << "m/" << sec % 60  << "s/"
             << msec % 1000 << "ms\n";
         nfa.print(out);
     }

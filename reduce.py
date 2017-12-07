@@ -51,6 +51,7 @@ def generate_output(*, folder, filename, extension):
         # random identifier
         hsh = ''.join([str(x) for x in random.sample(range(0, 9), 5)])
         dest = '{}.{}{}'.format(filename, hsh, extension)
+        dest = os.path.join(folder, dest)
         if not os.path.exists(dest):
             break
 
@@ -87,22 +88,26 @@ def execute_batch(batch_file):
                 args += line.split()
 
     args = parser.parse_args(args)
-    print(args)
+    #print(args)
 
     nfa_filenames = args.input.copy()
 
     if args.reduce:
         nfa_filenames = list()
+        if args.state_labels == None:
+            sys.stderr.write('Error: state frequencies are not specified\n')
+            exit(1)
+
         # generate output file name
         for j in args.input:
-            core = j.split('.')[0]
+            core = os.path.basename(j).split('.')[0]
             for i in args.reduce_to:
                 fname = generate_output(folder=nfadir, filename=core,
                     extension='.r' + str(i) + '.fa')
                 nfa_filenames.append(fname)
-                prog = ['./nfa_handler','reduce', j, '-t', 'prune', '-r', i,
-                    '-o', fname]
-                sys.stderr.write(' '.join([str(x) for x in prog]) + '\n')
+                prog = [str(x) for x in ['./nfa_handler','reduce', j, '-t',
+                    'prune', '-r', i, '-o', fname, args.state_labels]]
+                sys.stderr.write(' '.join(prog) + '\n')
                 # invoke program for reduction
                 subprocess.call(prog)
         
@@ -116,11 +121,12 @@ def execute_batch(batch_file):
 
         # find target nfas to each input nfa
         for i in nfa_filenames:
-            core = i.split('.')[0]
+            core = os.path.basename(i).split('.')[0]
+            target_str = os.path.join(snortdir, core)
             # find target NFA file name
-            target_nfa = glob.glob(core + '*.fa')
+            target_nfa = glob.glob(target_str + '*.fa')
             if len(target_nfa) == 0:
-                sys.stderr.write('Error: cannot find "' + core  +'*.fa"\n')
+                sys.stderr.write('Error: cannot find "' + target_str +'*.fa"\n')
                 continue
             # get first occurrence
             target_nfa = target_nfa[0]
@@ -128,9 +134,9 @@ def execute_batch(batch_file):
             output = generate_output(folder=resdir, filename=core,
                 extension='.json')
 
-            prog = ['./nfa_handler', 'error', target_nfa, i, '-o', output,
-                '-n', args.nworkers] + list(samples)
-            sys.stderr.write(' '.join([str(x) for x in prog]) + '\n')
+            prog = [str(x) for x in ['./nfa_handler', 'error', target_nfa, i,
+                '-o', output,'-n', args.nworkers]] + list(samples)
+            sys.stderr.write(' '.join(prog) + '\n')
             # invoke program for error computation
             subprocess.call(prog)
 
