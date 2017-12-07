@@ -40,7 +40,8 @@ struct Data {
     size_t accepted_target;
 
     Data(size_t data_size1 = 1, size_t data_size2 = 1) :
-        vector_data1(data_size1), vector_data2(data_size2) {}
+        vector_data1(data_size1), vector_data2(data_size2), total{0},
+        accepted_reduced{0}, accepted_target{0} {}
     ~Data() = default;
 
     void aggregate(const Data &other_data) {
@@ -103,6 +104,7 @@ std::string nfa_str1, nfa_str2;
 // error computing data
 std::vector<size_t> final_state_idx1;
 std::vector<size_t> final_state_idx2;
+// maps state to state string name
 std::map<State,State> state_map1;
 std::map<State,State> state_map2;
 
@@ -110,20 +112,6 @@ std::map<State,State> state_map2;
 std::chrono::steady_clock::time_point timepoint;
 
 // gather results
-/*
-void sum_up(
-    unsigned total, unsigned acc_target,
-    unsigned acc_reduced = 0, unsigned different = 0)
-{
-    mux.lock();
-    total_packets += total;
-    accepted_target += acc_target;
-    accepted_reduced += acc_reduced;
-    wrongly_classified += different;    
-    mux.unlock();
-}
-*/
-
 void sum_up(const Data &data)
 {
     mux.lock();
@@ -170,11 +158,8 @@ std::map<State, unsigned long> read_state_labels(
 }
 
 
-void reduce(const std::string &nfa_arg, const std::vector<std::string> &args)
+void reduce(const std::vector<std::string> &args)
 {
-    Nfa nfa;
-    nfa.read_from_file(nfa_arg.c_str());
-
     // TODO
     if (reduction_type == "prune") {
         auto labels = read_state_labels(nfa, args[0]);
@@ -211,7 +196,8 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
                 data.vector_data2[idx]++;
             }
         }
-        data.accepted_target += match;
+        
+        if (match) data.accepted_target++;
     }
 }
 
@@ -258,7 +244,6 @@ void process_pcaps(
             break;
         }
     }
-    db(4);
     // sum up results
     sum_up(local_data);
 }
@@ -303,7 +288,7 @@ void write_output(std::ostream &out)
         out << "    \"target\"              : \"" << fs::basename(nfa_str1)
             << "\",\n";
         out << "    \"target states\"       : " << sc1 << ",\n";
-        out << "    \"file\"                : \"" << nfa_str2 << "\",\n";
+        out << "    \"reduced file\"        : \"" << nfa_str2 << "\",\n";
         out << "    \"reduced\"             : \"" << fs::basename(nfa_str2)
             << "\",\n";
         out << "    \"reduced states\"      : " << sc2 << ",\n";
@@ -319,6 +304,28 @@ void write_output(std::ostream &out)
         out << "    \"reduced matches\"     : " << matches1 << ",\n";
         out << "    \"target matches\"      : " << matches2 << ",\n";
         out << "    \"matches error\"       : " << err2 << ",\n";
+        // concrete rules results
+        out << "    \"reduced rules\"       : {\n";
+        for (size_t i = 0; i < final_state_idx1.size(); i++) {
+            State s = final_state_idx1[i];
+            out << "        \"q" << state_map1[s]  << "\" : "
+                << all_data.vector_data1[s];
+            if (i == final_state_idx1.size() - 1) {
+                out << "}";
+            }
+            out << ",\n";
+        }
+
+        out << "    \"reduced rules\"       : {\n";
+        for (size_t i = 0; i < final_state_idx2.size(); i++) {
+            State s = final_state_idx2[i];
+            out << "        \"q" << state_map2[s]  << "\" : "
+                << all_data.vector_data2[s];
+            if (i == final_state_idx2.size() - 1) {
+                out << "\n    }";
+            }
+            out << ",\n";
+        }
         out << "    \"elapsed time\"        : \"" << min << "m/"
             << sec % 60  << "s/" << msec % 1000 << "ms\"\n";
         out << "}\n";
@@ -443,15 +450,14 @@ int main(int argc, char **argv)
         size_t size1 = nfa.state_count(), size2 = 1;
         // do some preparation for commands `label` and `error`
         if (cmd == "error") {
-            // TODO
-            size1 = reduced.state_count();
-            size2 = target.state_count();
             nfa_str2 = argv[opt_cnt + 1];
             reduced.read_from_file(nfa_str2.c_str());
             final_state_idx1 = reduced.get_final_state_idx();
             final_state_idx2 = target.get_final_state_idx();
             state_map1 = reduced.get_reversed_state_map();
             state_map2 = target.get_reversed_state_map();
+            size1 = reduced.state_count();
+            size2 = target.state_count();
             opt_cnt++;
         }
         else if (cmd == "label") {
@@ -481,7 +487,7 @@ int main(int argc, char **argv)
 
         // start computation
         if (cmd == "reduce") {
-            reduce(nfa_str1, pcaps);
+            reduce(pcaps);
         }
         else {
             // signal handling

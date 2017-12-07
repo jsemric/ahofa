@@ -41,13 +41,12 @@ void prune(
         // TODO
     }
     else {
-        pct = 0.7;
         int state_count = nfa.state_count();
         int removed = 0;
         int to_remove = (1 - pct) * state_count;
         std::cerr << state_count - to_remove << "/" << state_count << " " 
             << 100*pct << "%\n";
-        while (removed < to_remove)
+        while (removed < to_remove && removed < sorted_states.size())
         {
             State state = sorted_states[removed];
             merge_map[state] = rule_map[state];
