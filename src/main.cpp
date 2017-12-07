@@ -248,7 +248,7 @@ void process_pcaps(
     sum_up(local_data);
 }
 
-void write_output(std::ostream &out)
+void write_output(std::ostream &out, const std::vector<std::string> &pcaps)
 {
     unsigned msec = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - timepoint).count();
@@ -323,6 +323,15 @@ void write_output(std::ostream &out)
                 << all_data.vector_data2[s];
             if (i == final_state_idx2.size() - 1) {
                 out << "\n    }";
+            }
+            out << ",\n";
+        }
+        
+        out << "    \"pcaps\"               : [\n";
+        for (size_t i = 0; i < pcaps.size(); i++) {
+            out << "        \"" << pcaps[i] << "\"";
+            if (i == pcaps.size() - 1) {
+                out << "]";
             }
             out << ",\n";
         }
@@ -517,7 +526,7 @@ int main(int argc, char **argv)
             }
         }
 
-        write_output(*output);
+        write_output(*output, pcaps);
 
         if (outfile) {
             std::cerr << "Saved to \"" << outfile << "\"\n";
