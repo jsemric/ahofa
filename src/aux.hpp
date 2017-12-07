@@ -1,3 +1,6 @@
+/// @author Jakub Semric
+/// 2017
+
 #pragma once
 
 #include <iostream>

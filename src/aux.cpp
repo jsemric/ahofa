@@ -1,6 +1,8 @@
+/// @author Jakub Semric
+/// 2017
 
 #include <cassert>
-#include "aux.h"
+#include "aux.hpp"
 
 bool is_number(const std::string& s)
 {

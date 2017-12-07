@@ -1,10 +1,5 @@
 /// @author Jakub Semric
-///
-/// Class PcapReader for reading and processing packets in packet caputure files.
-/// @file pcap_reader.h
-///
-/// Unless otherwise stated, all code is licensed under a
-/// GNU General Public Licence v2.0
+/// 2017
 
 #pragma once
 

@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <ctype.h>
 
-#include "aux.h"
+#include "aux.hpp"
 
 namespace reduction {
 

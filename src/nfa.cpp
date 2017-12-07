@@ -8,8 +8,8 @@
 #include <cassert>
 #include <map>
 
-#include "aux.h"
-#include "nfa.h"
+#include "aux.hpp"
+#include "nfa.hpp"
 
 using namespace reduction;
 

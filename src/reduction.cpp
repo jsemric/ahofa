@@ -5,8 +5,8 @@
 #include <algorithm>
 #include <cassert>
 
-#include "aux.h"
-#include "reduction.h"
+#include "aux.hpp"
+#include "reduction.hpp"
 
 namespace reduction {
 
@@ -21,7 +21,7 @@ void prune(
     // merge only states with corresponding rule, which is defined by final
     // state
     std::map<State,State> rule_map = nfa.get_paths();
-    
+
     // sort state_labels
     // mark which states to prune
     std::vector<State> sorted_states;
@@ -44,7 +44,7 @@ void prune(
         int state_count = nfa.state_count();
         int removed = 0;
         int to_remove = (1 - pct) * state_count;
-        std::cerr << state_count - to_remove << "/" << state_count << " " 
+        std::cerr << state_count - to_remove << "/" << state_count << " "
             << 100*pct << "%\n";
         while (removed < to_remove && removed < sorted_states.size())
         {
@@ -58,7 +58,7 @@ void prune(
     for (auto i : merge_map) {
         std::cerr << i.first << "->" << i.second << "\n";
     }*/
-    
+
 
     nfa.merge_states(merge_map);
 }

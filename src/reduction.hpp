@@ -5,7 +5,7 @@
 
 #include <map>
 
-#include "nfa.h"
+#include "nfa.hpp"
 
 namespace reduction {
 

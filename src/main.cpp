@@ -1,7 +1,7 @@
 /// @author Jakub Semric
 /// 2017
 
-//#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include <iostream>
 #include <ostream>
@@ -20,9 +20,9 @@
 
 #include <boost/filesystem.hpp>
 
-#include "nfa.h"
-#include "pcap_reader.h"
-#include "reduction.h"
+#include "nfa.hpp"
+#include "pcap_reader.hpp"
+#include "reduction.hpp"
 
 #define db(x) std::cerr << x << "\n"
 
