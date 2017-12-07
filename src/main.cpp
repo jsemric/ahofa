@@ -38,16 +38,18 @@ struct Data {
     size_t total;
     size_t accepted_reduced;
     size_t accepted_target;
+    size_t wrongly_classified;
 
     Data(size_t data_size1 = 1, size_t data_size2 = 1) :
         vector_data1(data_size1), vector_data2(data_size2), total{0},
-        accepted_reduced{0}, accepted_target{0} {}
+        accepted_reduced{0}, accepted_target{0}, wrongly_classified{0} {}
     ~Data() = default;
 
     void aggregate(const Data &other_data) {
         total += other_data.total;
         accepted_target += other_data.accepted_target;
         accepted_reduced += other_data.accepted_reduced;
+        wrongly_classified += other_data.wrongly_classified;
         for (size_t i = 0; i < other_data.vector_data1.size(); i++) {
             vector_data1[i] += other_data.vector_data1[i];
         }
@@ -174,30 +176,32 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
 {
     std::vector<bool> bm(reduced.state_count());
     reduced.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
-    bool match = false;
+    int match1 = 0;
     for (size_t i = 0; i < final_state_idx1.size(); i++) {
         size_t idx = final_state_idx1[i];
         if (bm[idx]) {
-            match = true;
+            match1++;
             data.vector_data1[idx]++;
         }
     }
 
-    if (match) {
+    if (match1) {
         data.accepted_reduced++;
-        match = false;
+        int match2 = 0;
         // something was matched, lets find the difference
         std::vector<bool> bm(target.state_count());
         target.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
         for (size_t i = 0; i < final_state_idx2.size(); i++) {
             size_t idx = final_state_idx2[i];
             if (bm[idx]) {
-                match = true;
+                match2++;
                 data.vector_data2[idx]++;
             }
         }
+
+        if (match1 != match2) data.wrongly_classified++;
         
-        if (match) data.accepted_target++;
+        if (match2) data.accepted_target++;
     }
 }
 
@@ -279,7 +283,8 @@ void write_output(std::ostream &out, const std::vector<std::string> &pcaps)
             all_data.accepted_target;
 
         float err = wrongly_classified * 1.0 / all_data.total;
-        float err2 = (matches1 - matches2) * 1.0 / all_data.total;
+        float err2 = all_data.wrongly_classified * 1.0 / all_data.total;
+        float mme = (matches1 - matches2) * 1.0 / all_data.total;
         unsigned long sc1 = target.state_count();
         unsigned long sc2 = reduced.state_count();
 
@@ -300,10 +305,13 @@ void write_output(std::ostream &out, const std::vector<std::string> &pcaps)
         out << "    \"accepted by reduced\" : " << all_data.accepted_reduced
             << ",\n";
         out << "    \"wrongly classified\"  : " << wrongly_classified << ",\n";
-        out << "    \"error\"               : " << err << ",\n";
+        out << "    \"packet error\"        : " << err << ",\n";
         out << "    \"reduced matches\"     : " << matches1 << ",\n";
         out << "    \"target matches\"      : " << matches2 << ",\n";
-        out << "    \"matches error\"       : " << err2 << ",\n";
+        out << "    \"mean match error\"    : " << mme << ",\n";
+        out << "    \"wrong packet matches\": " << all_data.wrongly_classified 
+            << ",\n";
+        out << "    \"packet match error\"  : " << err2 << ",\n";
         // concrete rules results
         out << "    \"reduced rules\"       : {\n";
         for (size_t i = 0; i < final_state_idx1.size(); i++) {
