@@ -45,36 +45,95 @@ def nfa_to_ba(aut, output):
             f.write(i)
 
 
-def generate_output(aut, folder, filename, pars, to_dot):
+def generate_output(*, folder, filename, extension):
     # generating filename
     while True:
         # random identifier
         hsh = ''.join([str(x) for x in random.sample(range(0, 9), 5)])
-        basename = '{}-{}-{}'.format(filename, hsh, pars)
-        dest = os.path.join(folder, basename + '.fa')
+        dest = '{}.{}{}'.format(filename, hsh, extension)
         if not os.path.exists(dest):
             break
 
-    # create file with reduced automaton
-    sys.stderr.write('Saving NFA to ' + dest + '\n')
-    with open(dest, 'w') as f:
-        aut.print_fa(f)
-
-    if to_dot:
-        # create dot
-        dotdest = os.path.join(folder, basename + '.dot')
-        sys.stderr.write('Saving dot to ' + dest_dot + '\n')
-        with open(dest, 'w') as f:
-            aut.print_dot(f)
-        # create jpg
-        jpgdest = os.path.join(folder, basename + '.jpg')
-        sys.stderr.write('Saving jpg to ' + jpgdest + '\n')
-        subprocess.call(' '.join(['dot -Tjpg', dest, '-o', jpgdest]).split())
-
     return dest
 
-def execue_batch(batch_file):
-    pass
+def execute_batch(batch_file):
+    snortdir= 'min-snort'
+    nfadir = 'data/nfa'
+    resdir = 'data/results'
+
+    parser = argparse.ArgumentParser()
+    # general
+    parser.add_argument('-i', '--input', type=str, nargs='+', help='input NFA')
+    parser.add_argument('-n', '--nworkers', type=int, help='number of cores',
+        default=1)
+    parser.add_argument('-p', '--pcaps', type=str, nargs='+', help='pcap files')
+    # what to do
+    parser.add_argument('--error', action='store_true', help='compute error')
+    parser.add_argument('--reduce', action='store_true', help='reduce')
+    # reduction parameters
+    parser.add_argument('-t', '--reduction-type', choices=['prune','ga','armc'],
+        help='reduction type', default='prune')
+    parser.add_argument('-r', '--reduce-to', type=float, nargs='+',
+        help='% states', default=[0.1, 0.12, 0.14, 0.16, 0.18, 0.2])
+    parser.add_argument(
+        '-l','--state-labels', type=str, help='labeled nfa states')
+
+    # remove '#' comments and collect the arguments
+    args = list()
+    with open(batch_file, 'r') as f:
+        for line in f:
+            line = line.split('#')[0]
+            if line:
+                args += line.split()
+
+    args = parser.parse_args(args)
+    print(args)
+
+    nfa_filenames = args.input.copy()
+
+    if args.reduce:
+        nfa_filenames = list()
+        # generate output file name
+        for j in args.input:
+            core = j.split('.')[0]
+            for i in args.reduce_to:
+                fname = generate_output(folder=nfadir, filename=core,
+                    extension='.r' + str(i) + '.fa')
+                nfa_filenames.append(fname)
+                prog = ['./nfa_handler','reduce', j, '-t', 'prune', '-r', i,
+                    '-o', fname]
+                sys.stderr.write(' '.join([str(x) for x in prog]) + '\n')
+                # invoke program for reduction
+                subprocess.call(prog)
+        
+
+
+    if args.error:
+        # get pcap files
+        samples = set()
+        for i in args.pcaps:
+            samples |= set(glob.glob(i))
+
+        # find target nfas to each input nfa
+        for i in nfa_filenames:
+            core = i.split('.')[0]
+            # find target NFA file name
+            target_nfa = glob.glob(core + '*.fa')
+            if len(target_nfa) == 0:
+                sys.stderr.write('Error: cannot find "' + core  +'*.fa"\n')
+                continue
+            # get first occurrence
+            target_nfa = target_nfa[0]
+            # generate output file name
+            output = generate_output(folder=resdir, filename=core,
+                extension='.json')
+
+            prog = ['./nfa_handler', 'error', target_nfa, i, '-o', output,
+                '-n', args.nworkers] + list(samples)
+            sys.stderr.write(' '.join([str(x) for x in prog]) + '\n')
+            # invoke program for error computation
+            subprocess.call(prog)
+
 
 def main():
     parser = argparse.ArgumentParser()
