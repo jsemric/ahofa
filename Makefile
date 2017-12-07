@@ -1,4 +1,4 @@
-SUBDIR=src/computation
+SUBDIR=src
 
 all: $(SUBDIR)
 

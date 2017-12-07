@@ -11,6 +11,8 @@ import datetime
 import glob
 import random
 
+import aux_scripts.nfa as nfa
+
 def search_for_file(fname):
     for root, dirs, files in os.walk('.'):
         if fname in files:
@@ -71,10 +73,13 @@ def generate_output(aut, folder, filename, pars, to_dot):
 
     return dest
 
+def execue_batch(batch_file):
+    pass
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-b', '--batch', type=str, help='use batch file')
-        parser = argparse.ArgumentParser()
+
     # general arguments
     # common reduction arguments
     general_parser = argparse.ArgumentParser(add_help=False)
@@ -112,10 +117,14 @@ def main():
         parents = [general_parser, nfa_input_parser])
 
     args = parser.parse_args()
-    if args.command == None:
+    if args.command == None and args.batch == None:
         sys.stderr.write("Error: no arguments\n")
         sys.stderr.write("Use '--help' or '-h' for help.\n")
         exit(1)
+    elif args.batch:
+        sys.stderr.write('executing batch file\n')
+        execute_batch(args.batch)
+        exit(0)
 
     if args.command == 'min':
         jarfile = search_for_file('Reduce.jar')
@@ -161,6 +170,7 @@ def main():
         aut = nfa.Nfa.parse_fa(args.input)
         gen = aut.write_dot()
 
+    # write output
     if args.command == 'lmin' or args.command == 'draw':
         if args.output:
             with open(args.output, 'w') as f:
