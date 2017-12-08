@@ -292,8 +292,9 @@ class Nfa:
         yield 'digraph NFA {\n \
         rankdir=LR;size="8,5"\n \
         graph [ dpi = 400 ]\n \
-        node [shape = doublecircle];'
+        {node [shape = doublecircle, style=filled, fillcolor=red];'
         yield ';'.join(['q' + str(qf) for qf in self._final_states]) + '\n'
+        yield '}'
 
         yield 'node [shape = point]; qi\n \
         node [shape = circle];\n'

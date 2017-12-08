@@ -324,7 +324,7 @@ void write_output(std::ostream &out, const std::vector<std::string> &pcaps)
             out << ",\n";
         }
 
-        out << "    \"reduced rules\"       : {\n";
+        out << "    \"target rules\"       : {\n";
         for (size_t i = 0; i < final_state_idx2.size(); i++) {
             State s = final_state_idx2[i];
             out << "        \"q" << state_map2[s]  << "\" : "

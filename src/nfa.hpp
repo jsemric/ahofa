@@ -63,7 +63,7 @@ public:
     std::map<State,std::set<State>> succ() const;
     void merge_states(const std::map<State,State> &mapping);
     void print(std::ostream &out = std::cout) const;
-    void clear_final_state_transitions();
+    void clear_final_state_selfloop();
 
     virtual bool accept(const Word word, unsigned length) const;
 };

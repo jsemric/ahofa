@@ -72,7 +72,10 @@ void Nfa::set_initial_state(const std::string &init)
 void Nfa::set_final_states(const std::vector<std::string> &finals)
 {
     for (auto i : finals) {
-        final_states.insert(std::stoi(i));
+        State s = std::stoi(i);
+        final_states.insert(s);
+//        transitions[s];
+//        if (transitions.find(s) == transitions.end()) std::cerr << s << "\n";
     }
 }
 
@@ -85,7 +88,6 @@ void Nfa::set_transitions(const std::vector<TransFormat> &trans)
         Symbol symbol = hex_to_int(i.third);
         transitions[pstate][symbol].insert(qstate);
         transitions[qstate];
-        //std::cerr << i.first << " " << i.second << " " << qstate << "\n";
     }
 }
 
@@ -138,25 +140,22 @@ void Nfa::merge_states(const std::map<State,State> &mapping)
             continue;
         }
 
-        if (!is_final(src_state)) {
-            // final states have implicit self-loop over the input alphabet
-            // no reason to redirect transitions
-            for (auto j : transitions[merged_state]) {
-                Symbol symbol = j.first;
-                set_union(transitions[src_state][symbol], j.second);
-            }
-
-            if (is_final(merged_state)) {
-                std::cerr << i.first << " " << i.second << "\n";
-                final_states.erase(merged_state);
-                final_states.insert(src_state);
-            }
+        for (auto j : transitions[merged_state]) {
+            Symbol symbol = j.first;
+            set_union(transitions[src_state][symbol], j.second);
         }
+
+        if (is_final(merged_state)) {
+            std::cerr << i.first << " " << i.second << "\n";
+            final_states.erase(merged_state);
+            final_states.insert(src_state);
+        }
+
         // remove state and its transitions
         transitions.erase(merged_state);
     }
 
-    // redirect transitions to removed states
+    // redirect transitions that lead to removed states
     for (auto &states : transitions) {
         for (auto &rules : states.second) {
             std::set<State> new_states;
@@ -169,7 +168,7 @@ void Nfa::merge_states(const std::map<State,State> &mapping)
         }
     }
 
-    clear_final_state_transitions();
+    clear_final_state_selfloop();
 }
 
 std::map<State,State> Nfa::get_paths() const
@@ -247,10 +246,23 @@ bool Nfa::has_selfloop_to_self(State s) const
     return cnt == 256;
 }
 
-void Nfa::clear_final_state_transitions()
+void Nfa::clear_final_state_selfloop()
 {
-    for (auto i : final_states) {
-        transitions[i].clear();
+    for (auto f : final_states) {
+        bool remove = true;
+        for (auto &i : transitions[f]) {
+            auto &states = i.second;
+            if (states.size() > 1 ||
+                (states.size() == 1 && states.find(f) == states.end()))
+            {
+                remove = false;
+                break;
+            }
+        }
+        if (remove) {
+            transitions[f].clear();
+            //std::cerr << "now!\n";
+        }
     }
 }
 
