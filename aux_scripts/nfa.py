@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
 
 import re
+import math
+import sys
 from collections import defaultdict
+
+def rgb(maximum, minimum, value):
+    minimum, maximum = float(minimum), float(maximum)
+    ratio = 2 * (value-minimum) / (maximum - minimum)
+    b = int(max(0, 255*(1 - ratio)))
+    r = int(max(0, 255*(ratio - 1)))
+    g = 255 - b - r
+    return r, g, b
 
 class Nfa:
 
@@ -288,24 +298,69 @@ class Nfa:
         for line in self.write_fa():
             print(line, end='', file=f)
 
-    def write_dot(self):
+    def write_dot(self, show_trans=False, heatmap=None):
         yield 'digraph NFA {\n \
         rankdir=LR;size="8,5"\n \
-        graph [ dpi = 400 ]\n \
-        {node [shape = doublecircle, style=filled, fillcolor=red];'
-        yield ';'.join(['q' + str(qf) for qf in self._final_states]) + '\n'
-        yield '}'
+        graph [ dpi = 400 ]\n'
+        if heatmap:
+            heatmap = {state:int(math.log2(freq + 2)) for state, freq in heatmap.items()}
+            _max = max([freq for _, freq in heatmap.items()])
+            _min = min([freq for _, freq in heatmap.items()])
+            heatmap[self._initial_state] = _max
+            for state in self.states:
+                if state in self._final_states:
+                    shape = "shape = doublecircle,"
+                else:
+                    shape = 'shape = circle,'
+                r,g,b = rgb(_max, _min, heatmap[state])
+                color = "#%0.2X%0.2X%0.2X" % (r, g, b)
 
-        yield 'node [shape = point]; qi\n \
-        node [shape = circle];\n'
+                yield 'node [' +  shape + 'style=filled, fillcolor="' + color + '" ];'
+                yield 'q' + str(state) + '\n'
+        else:
+            yield '{node [shape = doublecircle, style=filled, fillcolor=red];'
+            yield ';'.join(['q' + str(qf) for qf in self._final_states]) + '\n'
+            yield '}\n'
+
+        yield 'node [shape = point]; qi\nnode [shape = circle];\n'
         yield 'qi -> q' + str(self._initial_state) + ';\n'
 
         succ = self.succ
         for state in self.states:
             for s in succ[state]:
-                yield ' '.join(('q' + str(state), '->', 'q' + str(s), ';\n'))
+                yield ' '.join(('q' + str(state), '->', 'q' + str(s)))
+                if show_trans:
+                    labels = []
+                    for symbol, states in self._transitions[state].items():
+                        if s in states:
+                            labels.append(symbol)
+                    yield ' [ label="' + self.sanitize_labels(labels) + '"]'
+                yield ";\n"
 
         yield '}\n'
+
+    def sanitize_labels(self, labels):
+        if len(labels) == 0:
+            return "け"
+
+        last = labels[0] - 1
+        res = hex(labels[0])
+        in_inerval = False
+        for i in labels:
+            if last == i - 1:
+                in_interval = True
+            else:
+                in_interval = False
+                res += '-' + hex(last) + ','
+                res += hex(i)
+            last = i
+
+        if len(labels) > 1:
+            if in_interval:
+                res += '-' + hex(last)
+
+        return res
+
 
     def print_dot(self, f=None):
         for line in self.write_dot():

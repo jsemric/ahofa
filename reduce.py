@@ -44,6 +44,17 @@ def nfa_to_ba(aut, output):
         for i in nfa.Nfa.fa_to_ba(aut.write_fa()):
             f.write(i)
 
+def get_freq(fname):
+    ret = {}
+    with open(fname, 'r') as f:
+        for line in f:
+            line = line.split('#')[0]
+            if line:
+                state, freq, *_ = line.split()
+                ret[int(state)] = int(freq)
+
+    return ret
+
 
 def generate_output(*, folder, filename, extension):
     # generating filename
@@ -110,7 +121,7 @@ def execute_batch(batch_file):
                 sys.stderr.write(' '.join(prog) + '\n')
                 # invoke program for reduction
                 subprocess.call(prog)
-        
+
 
 
     if args.error:
@@ -173,8 +184,12 @@ def main():
 
     # dot format and jpg format
     dot_parser = subparser.add_parser(
-        'draw', help='draw NFA',
+        'dot', help='draw NFA',
         parents = [general_parser, nfa_input_parser])
+    dot_parser.add_argument('-f', '--freq', type=str, help='heat map')
+    dot_parser.add_argument(
+        '-s', '--show-all', action='store_true',
+        help='show transition labels')
 
     # light-weight minimization
     lmin_parser = subparser.add_parser(
@@ -231,12 +246,15 @@ def main():
         aut = nfa.Nfa.parse_fa(args.input)
         aut.lightweight_minimization()
         gen = aut.write_fa()
-    elif args.command == 'draw':
+    elif args.command == 'dot':
+        freq = None
+        if args.freq:
+            freq = get_freq(args.freq)
         aut = nfa.Nfa.parse_fa(args.input)
-        gen = aut.write_dot()
+        gen = aut.write_dot(args.show_all, freq)
 
     # write output
-    if args.command == 'lmin' or args.command == 'draw':
+    if args.command == 'lmin' or args.command == 'dot':
         if args.output:
             with open(args.output, 'w') as f:
                 for i in gen:
