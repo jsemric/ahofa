@@ -65,22 +65,28 @@ const char *helpstr =
 "  -h            : show this help and exit\n"
 "  -o <FILE>     : specify output file\n"
 "  -n <NWORKERS> : number of workers to run in parallel\n"
-"  -f <FILTER>   : define bpf filter, for syntax see man page\n"
-"\nCommands:\n\n"
-"Error Computing:\n"
-"Usage: ./nfa_handlerler error [OPTIONS] TARGET [REDUCED] PCAPS ...\n"
-"Compute an error between 2 NFAs, label NFA or reduce the NFA.\n"
-"TARGET is supposed to be NFA and REDUCED is supposed to be an\n"
+"  -f <FILTER>   : define BPF filter, for syntax see man page\n"
+"\nCommands: {error, reduce, label}\n"
+"\nError Computing\n"
+"Usage: ./nfa_handlerler error [OPTIONS] TARGET REDUCED PCAPS ...\n"
+"Compute an error between 2 NFAs, denoted as TARGET and REDUCED.\n"
+"TARGET is supposed to be the input NFA and REDUCED is supposed to be an\n"
 "over-approximation of TARGET. PCAP stands for packet capture file.\n"
-"\nAutomaton Reduction:\n"
-"Usage: ./nfa_hanler reduce [OPTIONS] NFA [PCAPS | NFA_STATES]\n"
+"\nAutomaton Reduction\n"
+"Usage: ./nfa_hanler reduce [OPTIONS] NFA [MORE]\n"
+"Reduce the automaton using one of the following approaches: prune or\n"
+"GA (Genetic Algorithm).\n"
 "additional options:\n"
 "  -e <N>        : specify error, default value is 0.01\n"
 "  -r <N>        : reduce to %, this discards -e option\n"
-"  -t <TYPE>     : specify reduction type, possible choices: prune, ga, armc\n"
+"  -t <TYPE>     : specify the reduction type {prune, ga, armc}.\n"
+"                  In case of prune and ga reduction the MORE argument is \n"
+"                  a file with the labeled states of the input automaton.\n"
+"                  Otherwise, it stands for pcap capture files.\n"
 "\nState Labeling\n"
 "Usage: ./nfa_hanler label NFA PCAPS ...\n"
-"Some description. Has no additional options\n";
+"Argument NFA is the input automaton. PCAPS stands for packets used for state\n"
+"labeling. This command supplies no additional options.\n\n";
 
 
 // general program options
@@ -213,6 +219,7 @@ void label_states(
     for (size_t i = 0; i < reached_states.vector_data1.size(); i++) {
         reached_states.vector_data1[i] += bm[i];
     }
+    reached_states.vector_data1[nfa.get_initial_state()]++;
 }
 
 template<typename Handler>
@@ -348,7 +355,7 @@ void write_output(std::ostream &out, const std::vector<std::string> &pcaps)
         out << "}\n";
     }
     else if (cmd == "reduce") {
-        std::cerr << "Elapsed time : " << min << "m/" << sec % 60  << "s/"
+        std::cerr << "Elapsed time: " << min << "m/" << sec % 60  << "s/"
             << msec % 1000 << "ms\n";
         nfa.print(out);
     }

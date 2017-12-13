@@ -26,41 +26,56 @@ void prune(
     // mark which states to prune
     std::vector<State> sorted_states;
     State init = nfa.get_initial_state();
+    // total packets
+    size_t total = 0;
+
     for (auto i : state_labels) {
         if (!nfa.is_final(i.first) && i.first != init) {
             sorted_states.push_back(i.first);
         }
+        total = total < i.second ? i.second : total;
     }
 
+    // sort states in ascending order according to state packet frequencies
     std::sort(
         sorted_states.begin(), sorted_states.end(),
-        [&state_labels](State x, State y){
-            return state_labels.at(x) < state_labels.at(y);});
+        [&state_labels](State x, State y) {
+            return state_labels.at(x) < state_labels.at(y);
+        });
 
+    float error = 0;
+    size_t state_count = nfa.state_count();
+    size_t removed = 0;
+    
     if (eps != -1) {
-        // TODO
+        // use error rate
+        while (error < eps && removed < sorted_states.size())
+        {
+            State state = sorted_states[removed];
+            merge_map[state] = rule_map[state];
+            removed++;
+            error += (1.0 * state_labels.at(state)) / total;
+        }
     }
     else {
-        int state_count = nfa.state_count();
-        int removed = 0;
-        int to_remove = (1 - pct) * state_count;
-        std::cerr << state_count - to_remove << "/" << state_count << " "
-            << 100*pct << "%\n";
+        // use pct rate
+        size_t to_remove = (1 - pct) * state_count;
         while (removed < to_remove && removed < sorted_states.size())
         {
             State state = sorted_states[removed];
             merge_map[state] = rule_map[state];
             removed++;
+            error += (1.0 * state_labels.at(state)) / total;
         }
     }
 
-    /*
-    for (auto i : merge_map) {
-        std::cerr << i.first << "->" << i.second << "\n";
-    }*/
-
-
     nfa.merge_states(merge_map);
+    size_t new_sc = state_count - removed;
+    size_t reduced_to = new_sc * 100 / state_count;
+    std::cerr << "Reduction: " << new_sc << "/" << state_count
+        << " " << reduced_to << "%\n";
+    std::cerr << "Predicted error: " << error << std::endl;
+
 }
 
 }

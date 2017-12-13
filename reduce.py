@@ -151,6 +151,14 @@ def execute_batch(batch_file):
             # invoke program for error computation
             subprocess.call(prog)
 
+def write_output(fname, buf):
+    if fname:
+        with open(fname, 'w') as f:
+            for i in buf:
+                f.write(i)
+    else:
+        for i in buf:
+            print(i, end='')
 
 def main():
     parser = argparse.ArgumentParser()
@@ -188,8 +196,9 @@ def main():
         parents = [general_parser, nfa_input_parser])
     dot_parser.add_argument('-f', '--freq', type=str, help='heat map')
     dot_parser.add_argument(
-        '-s', '--show-all', action='store_true',
+        '-t', '--trans', action='store_true',
         help='show transition labels')
+    dot_parser.add_argument('-s', '--show', action='store_true', help='show result')
 
     # light-weight minimization
     lmin_parser = subparser.add_parser(
@@ -246,22 +255,22 @@ def main():
         aut = nfa.Nfa.parse_fa(args.input)
         aut.lightweight_minimization()
         gen = aut.write_fa()
+        write_output(args.output, gen)
     elif args.command == 'dot':
         freq = None
         if args.freq:
             freq = get_freq(args.freq)
         aut = nfa.Nfa.parse_fa(args.input)
-        gen = aut.write_dot(args.show_all, freq)
+        gen = aut.write_dot(args.trans, freq)
+        fname = args.output if args.output else 'nfa.dot'
+        write_output(fname, gen)
+        if args.show:
+            image = fname.split('.dot')[0] + '.jpg'
+            prog = 'dot -Tjpg ' + fname + ' -o ' + image
+            subprocess.call(prog.split())
+            prog = 'xdg-open ' + image
+            subprocess.call(prog.split())
 
-    # write output
-    if args.command == 'lmin' or args.command == 'dot':
-        if args.output:
-            with open(args.output, 'w') as f:
-                for i in gen:
-                    f.write(i)
-        else:
-            for i in gen:
-                print(i, end='')
 
 if __name__ == "__main__":
     main()

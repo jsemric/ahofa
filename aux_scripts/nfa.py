@@ -298,25 +298,26 @@ class Nfa:
         for line in self.write_fa():
             print(line, end='', file=f)
 
-    def write_dot(self, show_trans=False, heatmap=None):
+    def write_dot(self, show_trans=False, freq=None):
         yield 'digraph NFA {\n \
         rankdir=LR;size="8,5"\n \
-        graph [ dpi = 400 ]\n'
-        if heatmap:
-            heatmap = {state:int(math.log2(freq + 2)) for state, freq in heatmap.items()}
-            _max = max([freq for _, freq in heatmap.items()])
-            _min = min([freq for _, freq in heatmap.items()])
+        graph [ dpi = 1000 ]\n'
+        if freq:
+            freq[self._initial_state] = max(freq.values())
+            heatmap = {state:int(math.log2(f + 2)) for state, f in freq.items()}
+            _max = max(heatmap.values())
+            _min = min( heatmap.values())
             heatmap[self._initial_state] = _max
             for state in self.states:
                 if state in self._final_states:
-                    shape = "shape = doublecircle,"
+                    shape = "doublecircle"
                 else:
-                    shape = 'shape = circle,'
+                    shape = 'circle'
                 r,g,b = rgb(_max, _min, heatmap[state])
                 color = "#%0.2X%0.2X%0.2X" % (r, g, b)
-
-                yield 'node [' +  shape + 'style=filled, fillcolor="' + color + '" ];'
-                yield 'q' + str(state) + '\n'
+#                yield 'node [' +  shape + 'style=filled, fillcolor="' + color + '", label="'+str(heatmap[state])+ '"];'
+                yield 'node [shape={},style=filled,fillcolor="{}",label="{}"];q{}\n'.format(shape, color, freq[state],state)
+#                yield 'q' + str(state) + '\n'
         else:
             yield '{node [shape = doublecircle, style=filled, fillcolor=red];'
             yield ';'.join(['q' + str(qf) for qf in self._final_states]) + '\n'
