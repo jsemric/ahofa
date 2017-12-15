@@ -30,10 +30,12 @@ using namespace reduction;
 
 namespace fs = boost::filesystem;
 
+class StopWork : public std::exception {};
+
 struct Data {
     // long data
-    std::vector<size_t> vector_data1;
-    std::vector<size_t> vector_data2;
+    std::vector<size_t> nfa1_data;
+    std::vector<size_t> nfa2_data;
     // packets statistics
     size_t total;
     size_t accepted_reduced;
@@ -41,20 +43,20 @@ struct Data {
     size_t wrongly_classified;
 
     Data(size_t data_size1 = 1, size_t data_size2 = 1) :
-        vector_data1(data_size1), vector_data2(data_size2), total{0},
+        nfa1_data(data_size1), nfa2_data(data_size2), total{0},
         accepted_reduced{0}, accepted_target{0}, wrongly_classified{0} {}
-    ~Data() = default;
+    ~Data() {}// = default;
 
     void aggregate(const Data &other_data) {
         total += other_data.total;
         accepted_target += other_data.accepted_target;
         accepted_reduced += other_data.accepted_reduced;
         wrongly_classified += other_data.wrongly_classified;
-        for (size_t i = 0; i < other_data.vector_data1.size(); i++) {
-            vector_data1[i] += other_data.vector_data1[i];
+        for (size_t i = 0; i < other_data.nfa1_data.size(); i++) {
+            nfa1_data[i] += other_data.nfa1_data[i];
         }
-        for (size_t i = 0; i < other_data.vector_data2.size(); i++) {
-            vector_data2[i] += other_data.vector_data2[i];
+        for (size_t i = 0; i < other_data.nfa2_data.size(); i++) {
+            nfa2_data[i] += other_data.nfa2_data[i];
         }
     }
 };
@@ -115,9 +117,14 @@ std::vector<size_t> final_state_idx2;
 // maps state to state string name
 std::map<State,State> state_map1;
 std::map<State,State> state_map2;
+auto &state_map = state_map2;
 
 // time statistics
 std::chrono::steady_clock::time_point timepoint;
+
+// function declarations
+void label_states(
+     Data &reached_states, const unsigned char *payload, unsigned plen);
 
 // gather results
 void sum_up(const Data &data)
@@ -168,13 +175,52 @@ std::map<State, unsigned long> read_state_labels(
 
 void reduce(const std::vector<std::string> &args)
 {
-    // TODO
     if (reduction_type == "prune") {
         auto labels = read_state_labels(nfa, args[0]);
         prune(nfa, labels, reduce_ratio, eps);
     }
-    else {
-        ;
+    else if (reduction_type == "armc") {
+        // each state marked with prefix
+        std::vector<std::set<size_t>> state_labeling(nfa.state_count());
+        // we distinguish the prefixes by some integral value
+        size_t prefix = 0;
+        pcapreader::process_payload(
+            args[0].c_str(),
+            [&] (const unsigned char *payload, unsigned len)
+            {
+                nfa.parse_word(payload, len,
+                    [&state_labeling, &prefix](State s)
+                    {
+                        state_labeling[s].insert(prefix);
+                    },
+                    [&prefix]() {prefix++;});
+            }, filter_expr);
+        auto res = armc(nfa, state_labeling);
+        for (auto i : res) {
+            for (auto j : i) {
+                std::cout << state_map[j] << " ";
+            }
+            std::cout << std::endl;
+        }
+    }
+    else if (reduction_type == "a") {
+        Data data(nfa.state_count());
+        // generate random strings
+        std::srand(std::time(0));
+        for (size_t i = 0; i < 10000; i++) {
+            unsigned char word[1000];
+            for (size_t j = 0; j < 1000; j++) {
+                word[j] = std::rand() % 256;
+            }
+            label_states(data, word, 1000);
+        }
+
+        std::map<State, size_t> labels;
+        for (size_t i = 0; i < data.nfa1_data.size(); i++) {
+            labels[state_map[i]] = data.nfa1_data[i];
+        }
+
+        prune(nfa, labels, reduce_ratio, eps);
     }
 }
 
@@ -187,7 +233,7 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
         size_t idx = final_state_idx1[i];
         if (bm[idx]) {
             match1++;
-            data.vector_data1[idx]++;
+            data.nfa1_data[idx]++;
         }
     }
 
@@ -201,7 +247,7 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
             size_t idx = final_state_idx2[i];
             if (bm[idx]) {
                 match2++;
-                data.vector_data2[idx]++;
+                data.nfa2_data[idx]++;
             }
         }
 
@@ -216,10 +262,10 @@ void label_states(
 {
     std::vector<bool> bm(nfa.state_count());
     nfa.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
-    for (size_t i = 0; i < reached_states.vector_data1.size(); i++) {
-        reached_states.vector_data1[i] += bm[i];
+    for (size_t i = 0; i < reached_states.nfa1_data.size(); i++) {
+        reached_states.nfa1_data[i] += bm[i];
     }
-    reached_states.vector_data1[nfa.get_initial_state()]++;
+    reached_states.nfa1_data[nfa.get_initial_state_idx()]++;
 }
 
 template<typename Handler>
@@ -244,14 +290,19 @@ void process_pcaps(
                 }, filter_expr);
         }
         catch (std::ios_base::failure &e) {
-            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
+            std::cerr << "\033[1;31mWARNING\033[0m " << e.what() << "\n";
             // process other capture files, continue for loop
         }
         catch (std::runtime_error &e) {
-            std::cerr << "\033[1;31mWarning: " << e.what() << "\033[0m\n";
+            std::cerr << "\033[1;31mWARNING\033[0m " << e.what() << "\n";
+        }
+        catch (StopWork &e) {
+            // SIGINT - stop the thread
+            break;
         }
         catch (std::exception &e) {
             // SIGINT or other error
+            std::cerr << "\033[1;31mWARNING\033[0m " << e.what() << "\n";
             break;
         }
     }
@@ -275,74 +326,74 @@ void write_output(std::ostream &out, const std::vector<std::string> &pcaps)
         auto state_map = nfa.get_reversed_state_map();
         //auto state_depth = target.get_states_depth();
         for (unsigned long i = 0; i < target.state_count(); i++) {
-            out << state_map[i] << " " << all_data.vector_data1[i] << "\n";
+            out << state_map[i] << " " << all_data.nfa1_data[i] << "\n";
         }
     }
     else if (cmd == "error") {
-        size_t matches1 = 0, matches2 = 0;
-        for (auto i : all_data.vector_data1) {
-            matches1 += i;
+        size_t cls1 = 0, cls2 = 0;
+        for (auto i : all_data.nfa1_data) {
+            cls1 += i;
         }
-        for (auto i : all_data.vector_data2) {
-            matches2 += i;
+        for (auto i : all_data.nfa2_data) {
+            cls2 += i;
         }
-        size_t wrongly_classified =  all_data.accepted_reduced - 
+        size_t wrong_acceptances = all_data.accepted_reduced - 
             all_data.accepted_target;
 
-        float err = wrongly_classified * 1.0 / all_data.total;
-        float err2 = all_data.wrongly_classified * 1.0 / all_data.total;
-        float mme = (matches1 - matches2) * 1.0 / all_data.total;
+        float pe = wrong_acceptances * 1.0 / all_data.total;
+        float ce = all_data.wrongly_classified * 1.0 / all_data.total;
+        float ace = (cls1 - cls2) * 1.0 / all_data.total;
         unsigned long sc1 = target.state_count();
         unsigned long sc2 = reduced.state_count();
 
         out << "{\n";
-        out << "    \"target file\"         : \"" << nfa_str1 << "\",\n";
-        out << "    \"target\"              : \"" << fs::basename(nfa_str1)
+        out << "    \"target file\": \"" << nfa_str1 << "\",\n";
+        out << "    \"target\": \"" << fs::basename(nfa_str1)
             << "\",\n";
-        out << "    \"target states\"       : " << sc1 << ",\n";
-        out << "    \"reduced file\"        : \"" << nfa_str2 << "\",\n";
-        out << "    \"reduced\"             : \"" << fs::basename(nfa_str2)
+        out << "    \"target states\": " << sc1 << ",\n";
+        out << "    \"reduced file\": \"" << nfa_str2 << "\",\n";
+        out << "    \"reduced\": \"" << fs::basename(nfa_str2)
             << "\",\n";
-        out << "    \"reduced states\"      : " << sc2 << ",\n";
-        out << "    \"reduction\"           : " << 1.0 * sc2 / sc1
+        out << "    \"reduced states\": " << sc2 << ",\n";
+        out << "    \"reduction\": " << 1.0 * sc2 / sc1
             << ",\n";
-        out << "    \"total packets\"       : " << all_data.total << ",\n";
-        out << "    \"accepted by target\"  : " << all_data.accepted_target
+        out << "    \"total packets\": " << all_data.total << ",\n";
+        out << "    \"accepted by target\": " << all_data.accepted_target
             << ",\n";
-        out << "    \"accepted by reduced\" : " << all_data.accepted_reduced
+        out << "    \"accepted by reduced\": " << all_data.accepted_reduced
             << ",\n";
-        out << "    \"wrongly classified\"  : " << wrongly_classified << ",\n";
-        out << "    \"packet error\"        : " << err << ",\n";
-        out << "    \"reduced matches\"     : " << matches1 << ",\n";
-        out << "    \"target matches\"      : " << matches2 << ",\n";
-        out << "    \"mean match error\"    : " << mme << ",\n";
-        out << "    \"wrong packet matches\": " << all_data.wrongly_classified 
-            << ",\n";
-        out << "    \"packet match error\"  : " << err2 << ",\n";
+        out << "    \"wrongly acceptances\": " << wrong_acceptances << ",\n";
+        out << "    \"reduced classifications\":" << cls1 << ",\n";
+        out << "    \"target classifications\": " << cls2 << ",\n";
+        out << "    \"wrong packet classifications\": "
+            << all_data.wrongly_classified << ",\n";
+        out << "    \"ace\": " << ace << ",\n";
+        out << "    \"ce\": " << ce << ",\n";
+        out << "    \"pe\": " << pe << ",\n";
         // concrete rules results
-        out << "    \"reduced rules\"       : {\n";
+        out << "    \"reduced rules\": {\n";
         for (size_t i = 0; i < final_state_idx1.size(); i++) {
             State s = final_state_idx1[i];
             out << "        \"q" << state_map1[s]  << "\" : "
-                << all_data.vector_data1[s];
+                << all_data.nfa1_data[s];
             if (i == final_state_idx1.size() - 1) {
                 out << "}";
             }
             out << ",\n";
         }
 
-        out << "    \"target rules\"       : {\n";
+        out << "    \"target rules\": {\n";
         for (size_t i = 0; i < final_state_idx2.size(); i++) {
             State s = final_state_idx2[i];
             out << "        \"q" << state_map2[s]  << "\" : "
-                << all_data.vector_data2[s];
+                << all_data.nfa2_data[s];
             if (i == final_state_idx2.size() - 1) {
                 out << "\n    }";
             }
             out << ",\n";
         }
         
-        out << "    \"pcaps\"               : [\n";
+        out << "    \"pcaps\": [\n";
         for (size_t i = 0; i < pcaps.size(); i++) {
             out << "        \"" << pcaps[i] << "\"";
             if (i == pcaps.size() - 1) {
@@ -350,11 +401,11 @@ void write_output(std::ostream &out, const std::vector<std::string> &pcaps)
             }
             out << ",\n";
         }
-        out << "    \"elapsed time\"        : \"" << min << "m/"
+        out << "    \"elapsed time\": \"" << min << "m/"
             << sec % 60  << "s/" << msec % 1000 << "ms\"\n";
         out << "}\n";
     }
-    else if (cmd == "reduce") {
+    else if (cmd == "reduce" && reduction_type != "armc") {
         std::cerr << "Elapsed time: " << min << "m/" << sec % 60  << "s/"
             << msec % 1000 << "ms\n";
         nfa.print(out);
@@ -472,6 +523,7 @@ int main(int argc, char **argv)
         nfa_str1 = argv[opt_cnt];
         target.read_from_file(nfa_str1.c_str());
         size_t size1 = nfa.state_count(), size2 = 1;
+        state_map = nfa.get_reversed_state_map();
         // do some preparation for commands `label` and `error`
         if (cmd == "error") {
             nfa_str2 = argv[opt_cnt + 1];
@@ -480,7 +532,6 @@ int main(int argc, char **argv)
             final_state_idx2 = target.get_final_state_idx();
             state_map1 = reduced.get_reversed_state_map();
             state_map2 = target.get_reversed_state_map();
-            size1 = reduced.state_count();
             size2 = target.state_count();
             opt_cnt++;
         }
@@ -550,7 +601,7 @@ int main(int argc, char **argv)
         }
     }
     catch (std::exception &e) {
-        std::cerr << "\033[1;31mError:\033[0m " << e.what() << std::endl;
+        std::cerr << "\033[1;31mERROR\033[0m " << e.what() << std::endl;
         return 1;
     }
 

@@ -17,6 +17,7 @@
 
 namespace reduction {
 
+auto default_lambda = [](){;};
 // transitions serialization format
 using TransFormat = Triple<std::string, std::string, std::string>;
 // string vector
@@ -61,9 +62,14 @@ public:
     std::map<State,State> get_paths() const;
     std::map<State,std::set<State>> pred() const;
     std::map<State,std::set<State>> succ() const;
+    std::map<State, size_t> evaluate_states() const;
+    std::map<State, size_t> evaluate_states(std::vector<long double> distrib) const;
     void merge_states(const std::map<State,State> &mapping);
     void print(std::ostream &out = std::cout) const;
     void clear_final_state_selfloop();
+
+    template<typename FuncType>
+    void breadth_first_search(FuncType handler) const;
 
     virtual bool accept(const Word word, unsigned length) const;
 };
@@ -91,12 +97,15 @@ public:
     std::map<State,State> get_state_map() const {return state_map;}
     std::map<State,State> get_reversed_state_map() const;
     std::vector<State> get_final_state_idx() const;
+    size_t get_initial_state_idx() const { return state_map.at(initial_state);}
     virtual void read_from_file(std::ifstream &input) override;
     using Nfa::read_from_file;
     void build();
 
-    template<typename Handler>
-    void parse_word(const Word word, unsigned length, Handler handler) const;
+    template<typename FuncType1, typename FuncType2 = decltype(default_lambda)>
+    void parse_word(
+        const Word word, unsigned length, FuncType1 visited_state_handler,
+        FuncType2 loop_handler = default_lambda) const;
 };
 
 
@@ -104,9 +113,10 @@ public:
 // inline methods implementation of FastNfa class
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-template<typename Handler>
+template<typename FuncType1, typename FuncType2>
 void FastNfa::parse_word(
-    const Word word, unsigned length, Handler handler) const
+    const Word word, unsigned length, FuncType1 visited_state_handler,
+    FuncType2 loop_handler) const
 {
     std::set<State> actual{state_map.at(initial_state)};
 
@@ -117,11 +127,14 @@ void FastNfa::parse_word(
             auto trans = trans_vector[(j << shift) + word[i]];
             if (!trans.empty()) {
                 for (auto k : trans) {
-                    handler(k);
+                    // do something with visited state, use this information
+                    visited_state_handler(k);
                     next.insert(k);
                 }
             }
         }
+        // call function to do something at the end of current iteration
+        loop_handler();
         actual = std::move(next);
     }   
 }

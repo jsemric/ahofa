@@ -266,6 +266,73 @@ void Nfa::clear_final_state_selfloop()
     }
 }
 
+std::map<State,size_t> Nfa::evaluate_states() const
+{
+    std::vector<long double> distrib(256);
+    for (auto &i : distrib) {
+        i = 1.0 / 256; //std::log2(1/256);
+    }
+    return evaluate_states(distrib);
+}
+
+std::map<State,size_t> Nfa::evaluate_states(std::vector<long double> distrib) const
+{
+    std::map<State, long double> state_freq;
+    state_freq[initial_state] = 1;
+    std::vector<State> ordered_states{initial_state};
+    auto suc = succ();
+
+    breadth_first_search([&](State s) {
+        ordered_states.push_back(s);
+        for (auto i : transitions.at(s)) {
+            for (auto j : i.second) {
+                if (j != i.first) {
+                    state_freq[j] += distrib[i.first];
+                }
+            }
+        }
+    });
+
+    long double min = 1;
+    for (auto i : ordered_states) {
+        for (auto j : suc[i]) {
+            if (i != j) {
+                state_freq[j] *= state_freq[i];
+            }
+        }
+        min = state_freq[i] < min ? state_freq[i] : min;
+        std::cerr << state_freq[i] << "\n";
+    }
+    std::map<State,size_t> ret;
+    for (auto i : state_freq) {
+        ret[i.first] = i.second * min;
+    }
+    return ret;
+}
+
+template<typename FuncType>
+void Nfa::breadth_first_search(FuncType handler) const
+{
+    std::set<State> actual{initial_state};
+    std::set<State> visited{initial_state};
+
+    while (!actual.empty()) {
+        std::set<State> next;
+        for (auto s : actual) {
+            handler(s);
+            for (auto i : transitions.at(s)) {
+                for (auto j : i.second) {
+                    if (visited.find(j) == visited.end()) {
+                        next.insert(j);
+                    }
+                }
+            }
+        }
+        set_union(visited, actual);
+        actual = std::move(next);
+    }
+}
+
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // implementation of FastNfa class methods
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

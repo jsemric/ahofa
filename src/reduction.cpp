@@ -78,4 +78,35 @@ void prune(
 
 }
 
+std::vector<std::set<State>> armc(
+    Nfa &nfa, const std::vector<std::set<size_t>> &state_labels)
+{
+    std::vector<std::set<State>> eq_states;
+    std::set<State> empty;
+    int cnt = 0;
+    for (size_t i = 0; i < state_labels.size(); i++) {
+
+        if (state_labels[i].empty()) {
+            empty.insert(i);
+            continue;
+        }
+
+        std::set<State> eq;
+        for (size_t j = i + 1; j < state_labels.size(); j++) {
+            if (state_labels[i] == state_labels[j]) {
+                eq.insert(j);cnt++;
+            }
+        }
+        if (!eq.empty()) {
+            eq.insert(i);
+            eq_states.push_back(eq);
+        }
+    }
+    eq_states.push_back(empty);
+
+    std::cerr << cnt << "\n";
+    
+    return eq_states;
+}
+
 }
