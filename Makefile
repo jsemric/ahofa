@@ -11,6 +11,6 @@ clean:
 	$(MAKE) -C $(SUBDIR) clean
 
 no-data:
-	rm -f *.fa *.dot *.jpg *.json *.jsn
+	rm -f *.fa *.dot *.jpg *.json *.jsn tmp*
 
 .PHONY: all clean $(SUBDIR)
