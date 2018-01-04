@@ -15,6 +15,7 @@
 #include <mutex>
 #include <thread>
 #include <chrono>
+#include <array>
 #include <ctype.h>
 #include <getopt.h>
 
@@ -24,34 +25,39 @@
 #include "pcap_reader.hpp"
 #include "reduction.hpp"
 
-#define db(x) std::cerr << x << "\n"
+#define db(x) cerr << x << "\n"
 
 using namespace reduction;
+using namespace std;
 
 namespace fs = boost::filesystem;
 
-class StopWork : public std::exception {};
+class StopWork : public exception {};
 
 struct Data {
     // long data
-    std::vector<size_t> nfa1_data;
-    std::vector<size_t> nfa2_data;
+    vector<size_t> nfa1_data;
+    vector<size_t> nfa2_data;
     // packets statistics
     size_t total;
     size_t accepted_reduced;
     size_t accepted_target;
     size_t wrongly_classified;
+    size_t correctly_classified;
 
     Data(size_t data_size1 = 1, size_t data_size2 = 1) :
         nfa1_data(data_size1), nfa2_data(data_size2), total{0},
-        accepted_reduced{0}, accepted_target{0}, wrongly_classified{0} {}
-    ~Data() {}// = default;
+        accepted_reduced{0}, accepted_target{0}, wrongly_classified{0},
+        correctly_classified{0} {}
+
+    ~Data() = default;
 
     void aggregate(const Data &other_data) {
         total += other_data.total;
         accepted_target += other_data.accepted_target;
         accepted_reduced += other_data.accepted_reduced;
         wrongly_classified += other_data.wrongly_classified;
+        correctly_classified += other_data.correctly_classified;
         for (size_t i = 0; i < other_data.nfa1_data.size(); i++) {
             nfa1_data[i] += other_data.nfa1_data[i];
         }
@@ -76,7 +82,7 @@ const char *helpstr =
 "over-approximation of TARGET. PCAP stands for packet capture file.\n"
 "\nAutomaton Reduction\n"
 "Usage: ./nfa_hanler reduce [OPTIONS] NFA [MORE]\n"
-"Reduce the automaton using one of the following approaches: prune or\n"
+"Reduce the automaton using one of the following approaches: state pruning or\n"
 "GA (Genetic Algorithm).\n"
 "additional options:\n"
 "  -e <N>        : specify error, default value is 0.01\n"
@@ -92,35 +98,35 @@ const char *helpstr =
 
 
 // general program options
-std::string cmd = "";
+string cmd = "";
 unsigned nworkers = 1;
 const char *filter_expr;
 
 // reduction additional options
-std::string reduction_type = "prune";
+string reduction_type = "prune";
 float eps = -1;
 float reduce_ratio = 0.01;
 
 // thread communication
 bool continue_work = true;
-std::mutex mux;
+mutex mux;
 
 // common data
 Data all_data;
 FastNfa target, reduced;
 FastNfa &nfa = target;
-std::string nfa_str1, nfa_str2;
+string nfa_str1, nfa_str2;
 
 // error computing data
-std::vector<size_t> final_state_idx1;
-std::vector<size_t> final_state_idx2;
+vector<size_t> final_state_idx1;
+vector<size_t> final_state_idx2;
 // maps state to state string name
-std::map<State,State> state_map1;
-std::map<State,State> state_map2;
+map<State,State> state_map1;
+map<State,State> state_map2;
 auto &state_map = state_map2;
 
 // time statistics
-std::chrono::steady_clock::time_point timepoint;
+chrono::steady_clock::time_point timepoint;
 
 // function declarations
 void label_states(
@@ -136,35 +142,35 @@ void sum_up(const Data &data)
 
 void sighandl(int signal)
 {
-    std::cout << "\n";
+    cout << "\n";
     // stop all work
     continue_work = false;
 }
 
-std::map<State, unsigned long> read_state_labels(
-    const Nfa &nfa, const std::string &fname)
+map<State, unsigned long> read_state_labels(
+    const Nfa &nfa, const string &fname)
 {
-    std::map<State, unsigned long> ret;
-    std::ifstream in{fname};
+    map<State, unsigned long> ret;
+    ifstream in{fname};
     if (!in.is_open()) {
-        throw std::runtime_error("error loading NFA");
+        throw runtime_error("error loading NFA");
     }
 
-    std::string buf;
-    while (std::getline(in, buf)) {
+    string buf;
+    while (getline(in, buf)) {
         // remove '#' comment
         buf = buf.substr(0, buf.find("#"));
         if (buf == "") {
             continue;
         }
-        std::istringstream iss(buf);
+        istringstream iss(buf);
         State s;
         unsigned long l;
         if (!(iss >> s >> l)) {
-            throw std::runtime_error("invalid state labels syntax");
+            throw runtime_error("invalid state labels syntax");
         }
         if (!nfa.is_state(s)) {
-            throw std::runtime_error("invalid NFA state: " + std::to_string(s));
+            throw runtime_error("invalid NFA state: " + to_string(s));
         }
         ret[s] = l;
     }
@@ -172,8 +178,7 @@ std::map<State, unsigned long> read_state_labels(
     return ret;
 }
 
-
-void reduce(const std::vector<std::string> &args)
+void reduce(const vector<string> &args)
 {
     if (reduction_type == "prune") {
         auto labels = read_state_labels(nfa, args[0]);
@@ -181,7 +186,7 @@ void reduce(const std::vector<std::string> &args)
     }
     else if (reduction_type == "armc") {
         // each state marked with prefix
-        std::vector<std::set<size_t>> state_labeling(nfa.state_count());
+        vector<set<size_t>> state_labeling(nfa.state_count());
         // we distinguish the prefixes by some integral value
         size_t prefix = 0;
         pcapreader::process_payload(
@@ -198,35 +203,38 @@ void reduce(const std::vector<std::string> &args)
         auto res = armc(nfa, state_labeling);
         for (auto i : res) {
             for (auto j : i) {
-                std::cout << state_map[j] << " ";
+                cout << state_map[j] << " ";
             }
-            std::cout << std::endl;
+            cout << endl;
         }
     }
     else if (reduction_type == "a") {
         Data data(nfa.state_count());
         // generate random strings
-        std::srand(std::time(0));
+        srand(time(0));
         for (size_t i = 0; i < 10000; i++) {
             unsigned char word[1000];
             for (size_t j = 0; j < 1000; j++) {
-                word[j] = std::rand() % 256;
+                word[j] = rand() % 256;
             }
             label_states(data, word, 1000);
         }
 
-        std::map<State, size_t> labels;
+        map<State, size_t> labels;
         for (size_t i = 0; i < data.nfa1_data.size(); i++) {
             labels[state_map[i]] = data.nfa1_data[i];
         }
 
         prune(nfa, labels, reduce_ratio, eps);
     }
+    else if (reduction_type == "ga") {
+        // TODO or not
+    }
 }
 
 void compute_error(Data &data, const unsigned char *payload, unsigned plen)
 {
-    std::vector<bool> bm(reduced.state_count());
+    vector<bool> bm(reduced.state_count());
     reduced.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
     int match1 = 0;
     for (size_t i = 0; i < final_state_idx1.size(); i++) {
@@ -241,7 +249,7 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
         data.accepted_reduced++;
         int match2 = 0;
         // something was matched, lets find the difference
-        std::vector<bool> bm(target.state_count());
+        vector<bool> bm(target.state_count());
         target.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
         for (size_t i = 0; i < final_state_idx2.size(); i++) {
             size_t idx = final_state_idx2[i];
@@ -251,8 +259,13 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
             }
         }
 
-        if (match1 != match2) data.wrongly_classified++;
-        
+        if (match1 != match2) {
+            data.wrongly_classified++;
+        }
+        else {
+            data.correctly_classified++;
+        }
+
         if (match2) data.accepted_target++;
     }
 }
@@ -260,7 +273,7 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
 void label_states(
      Data &reached_states, const unsigned char *payload, unsigned plen)
 {
-    std::vector<bool> bm(nfa.state_count());
+    vector<bool> bm(nfa.state_count());
     nfa.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
     for (size_t i = 0; i < reached_states.nfa1_data.size(); i++) {
         reached_states.nfa1_data[i] += bm[i];
@@ -270,7 +283,7 @@ void label_states(
 
 template<typename Handler>
 void process_pcaps(
-    const std::vector<std::string> &pcaps, Data &local_data, Handler handler)
+    const vector<string> &pcaps, Data &local_data, Handler handler)
 {
     for (unsigned i = 0; i < pcaps.size(); i++) {
         try {
@@ -281,7 +294,7 @@ void process_pcaps(
                 {
                     if (continue_work == false) {
                         // SIGINT caught in parent, sum up and exit
-                        throw std::exception();
+                        throw StopWork();
                     }
                     // specific payload handler
                     local_data.total++;
@@ -289,20 +302,20 @@ void process_pcaps(
 
                 }, filter_expr);
         }
-        catch (std::ios_base::failure &e) {
-            std::cerr << "\033[1;31mWARNING\033[0m " << e.what() << "\n";
+        catch (ios_base::failure &e) {
+            cerr << "\033[1;31mWARNING\033[0m " << e.what() << "\n";
             // process other capture files, continue for loop
         }
-        catch (std::runtime_error &e) {
-            std::cerr << "\033[1;31mWARNING\033[0m " << e.what() << "\n";
+        catch (runtime_error &e) {
+            cerr << "\033[1;31mWARNING\033[0m " << e.what() << "\n";
         }
         catch (StopWork &e) {
             // SIGINT - stop the thread
             break;
         }
-        catch (std::exception &e) {
+        catch (exception &e) {
             // SIGINT or other error
-            std::cerr << "\033[1;31mWARNING\033[0m " << e.what() << "\n";
+            cerr << "\033[1;31mWARNING\033[0m " << e.what() << "\n";
             break;
         }
     }
@@ -310,16 +323,16 @@ void process_pcaps(
     sum_up(local_data);
 }
 
-void write_output(std::ostream &out, const std::vector<std::string> &pcaps)
+void write_output(ostream &out, const vector<string> &pcaps)
 {
-    unsigned msec = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now() - timepoint).count();
+    unsigned msec = chrono::duration_cast<chrono::microseconds>(
+        chrono::steady_clock::now() - timepoint).count();
     unsigned sec = msec / 1000 / 1000;
     unsigned min = sec / 60;
 
     if (cmd == "label") {
-        out << "# Total packets : " << all_data.total << std::endl;
-    
+        out << "# Total packets : " << all_data.total << endl;
+
         out << "# Elapsed time  : " << min << "m/" << sec % 60  << "s/"
             << msec % 1000 << "ms\n";
 
@@ -337,12 +350,14 @@ void write_output(std::ostream &out, const std::vector<std::string> &pcaps)
         for (auto i : all_data.nfa2_data) {
             cls2 += i;
         }
-        size_t wrong_acceptances = all_data.accepted_reduced - 
+        size_t wrong_acceptances = all_data.accepted_reduced -
             all_data.accepted_target;
 
         float pe = wrong_acceptances * 1.0 / all_data.total;
         float ce = all_data.wrongly_classified * 1.0 / all_data.total;
         float ace = (cls1 - cls2) * 1.0 / all_data.total;
+        float cls_ratio = all_data.correctly_classified * 1.0 /
+            (all_data.correctly_classified + all_data.wrongly_classified);
         unsigned long sc1 = target.state_count();
         unsigned long sc2 = reduced.state_count();
 
@@ -367,6 +382,10 @@ void write_output(std::ostream &out, const std::vector<std::string> &pcaps)
         out << "    \"target classifications\": " << cls2 << ",\n";
         out << "    \"wrong packet classifications\": "
             << all_data.wrongly_classified << ",\n";
+        out << "    \"correct packet classifications\":"
+            << all_data.correctly_classified << ",\n";
+        out << "    \"correct packet classifications rate\":"
+            << cls_ratio << ",\n";
         out << "    \"ace\": " << ace << ",\n";
         out << "    \"ce\": " << ce << ",\n";
         out << "    \"pe\": " << pe << ",\n";
@@ -392,7 +411,7 @@ void write_output(std::ostream &out, const std::vector<std::string> &pcaps)
             }
             out << ",\n";
         }
-        
+
         out << "    \"pcaps\": [\n";
         for (size_t i = 0; i < pcaps.size(); i++) {
             out << "        \"" << pcaps[i] << "\"";
@@ -406,27 +425,27 @@ void write_output(std::ostream &out, const std::vector<std::string> &pcaps)
         out << "}\n";
     }
     else if (cmd == "reduce" && reduction_type != "armc") {
-        std::cerr << "Elapsed time: " << min << "m/" << sec % 60  << "s/"
+        cerr << "Elapsed time: " << min << "m/" << sec % 60  << "s/"
             << msec % 1000 << "ms\n";
         nfa.print(out);
     }
 }
 
-void check_float(float x, float max_val = 1, float min_val = 0) 
+void check_float(float x, float max_val = 1, float min_val = 0)
 {
     if (x > max_val || x < min_val) {
-        throw std::runtime_error(
-            "invalid float value: \"" + std::to_string(x) +
-            "\", should be in range (" + std::to_string(min_val) + "," +
-            std::to_string(max_val) + ")");
+        throw runtime_error(
+            "invalid float value: \"" + to_string(x) +
+            "\", should be in range (" + to_string(min_val) + "," +
+            to_string(max_val) + ")");
     }
 }
 
 int main(int argc, char **argv)
 {
-    timepoint = std::chrono::steady_clock::now();
-    std::string ofname;
-    std::vector<std::string> pcaps;
+    timepoint = chrono::steady_clock::now();
+    string ofname;
+    vector<string> pcaps;
 
     const char *outfile = nullptr;
     int opt_cnt = 2;    // program name + command
@@ -437,16 +456,16 @@ int main(int argc, char **argv)
         if (argc > 1) {
             cmd = argv[1];
             if (cmd == "--help" || cmd == "-h") {
-                std::cerr << helpstr;
+                cerr << helpstr;
                 return 0;
             }
             // check if command is valid
             if (cmd != "error" && cmd != "reduce" && cmd != "label") {
-                throw std::runtime_error("invalid command: \"" + cmd + "\"");
+                throw runtime_error("invalid command: \"" + cmd + "\"");
             }
-        } 
+        }
         else {
-            std::cerr << helpstr;
+            cerr << helpstr;
             return 1;
         }
 
@@ -455,14 +474,14 @@ int main(int argc, char **argv)
             switch (c) {
                 // general options
                 case 'h':
-                    std::cerr << helpstr;
+                    cerr << helpstr;
                     return 0;
                 case 'o':
                     outfile = optarg;
                     opt_cnt++;
                     break;
                 case 'n':
-                    nworkers = std::stoi(optarg);
+                    nworkers = stoi(optarg);
                     opt_cnt++;
                     break;
                 case 'f':
@@ -473,13 +492,13 @@ int main(int argc, char **argv)
                 case 'e':
                     opt_cnt++;
                     reduce_options_set = 1;
-                    eps = std::stod(optarg);
+                    eps = stod(optarg);
                     check_float(eps);
                     break;
                 case 'r':
                     opt_cnt++;
                     reduce_options_set = 1;
-                    reduce_ratio = std::stod(optarg);
+                    reduce_ratio = stod(optarg);
                     check_float(reduce_ratio);
                     break;
                 case 't':
@@ -495,14 +514,14 @@ int main(int argc, char **argv)
         if ((cmd == "error" && reduce_options_set) ||
             (cmd == "label" && reduce_options_set))
         {
-            throw std::runtime_error("invalid combinations of arguments");
+            throw runtime_error("invalid combinations of arguments");
         }
 
         if (nworkers <= 0 ||
-            nworkers >= std::thread::hardware_concurrency())
+            nworkers >= thread::hardware_concurrency())
         {
-            throw std::runtime_error(
-                "invalid number of cores \"" + std::to_string(nworkers) + "\"");
+            throw runtime_error(
+                "invalid number of cores \"" + to_string(nworkers) + "\"");
         }
 
         // checking the number of positional arguments
@@ -510,12 +529,12 @@ int main(int argc, char **argv)
 
         if (argc - opt_cnt < min_pos_cnt)
         {
-            throw std::runtime_error("invalid positional arguments");
+            throw runtime_error("invalid positional arguments");
         }
 
         /*
         for (int i = opt_cnt; i <= argc; i++) {
-            std::cout << argv[i] << "\n";
+            cout << argv[i] << "\n";
         }
         */
 
@@ -542,20 +561,20 @@ int main(int argc, char **argv)
         // get capture files
         for (int i = opt_cnt + 1/*2 - accepted_only*/; i < argc; i++) {
             pcaps.push_back(argv[i]);
-            //std::cerr << argv[i] << "\n";
+            //cerr << argv[i] << "\n";
         }
 
         // check output file
-        std::ostream *output = &std::cout;
+        ostream *output = &cout;
         if (outfile) {
-            output = new std::ofstream{outfile};
-            if (!static_cast<std::ofstream*>(output)->is_open()) {
-                throw std::runtime_error("cannot open output file");
+            output = new ofstream{outfile};
+            if (!static_cast<ofstream*>(output)->is_open()) {
+                throw runtime_error("cannot open output file");
             }
         }
 
         // divide work
-        std::vector<std::vector<std::string>> v(nworkers);
+        vector<vector<string>> v(nworkers);
         for (unsigned i = 0; i < pcaps.size(); i++) {
             v[i % nworkers].push_back(pcaps[i]);
         }
@@ -566,12 +585,12 @@ int main(int argc, char **argv)
         }
         else {
             // signal handling
-            std::signal(SIGINT, sighandl);
+            signal(SIGINT, sighandl);
             all_data = Data(size1, size2);
 
-            std::vector<std::thread> threads;
+            vector<thread> threads;
             for (unsigned i = 0; i < nworkers; i++) {
-                threads.push_back(std::thread{[&v, i, size1, size2]()
+                threads.push_back(thread{[&v, i, size1, size2]()
                         {
                             Data local_data(size1, size2);
 
@@ -595,13 +614,13 @@ int main(int argc, char **argv)
         write_output(*output, pcaps);
 
         if (outfile) {
-            std::cerr << "Saved to \"" << outfile << "\"\n";
-            static_cast<std::ofstream*>(output)->close();
+            cerr << "Saved to \"" << outfile << "\"\n";
+            static_cast<ofstream*>(output)->close();
             delete output;
         }
     }
-    catch (std::exception &e) {
-        std::cerr << "\033[1;31mERROR\033[0m " << e.what() << std::endl;
+    catch (exception &e) {
+        cerr << "\033[1;31mERROR\033[0m " << e.what() << endl;
         return 1;
     }
 

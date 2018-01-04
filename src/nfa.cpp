@@ -12,38 +12,48 @@
 #include "nfa.hpp"
 
 using namespace reduction;
+using namespace std;
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // implementation of Nfa class methods
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-void Nfa::read_from_file(const char *input)
+Nfa::Nfa(const Nfa &nfa)
 {
-    std::ifstream in{input};
+    initial_state = initial_state;
+    final_states = final_states;
+    transitions = nfa.transitions;
+}
+
+void Nfa::read_from_file(
+    const char *input, map<State,set<State>> *final_states_map)
+{
+    ifstream in{input};
     if (!in.is_open()) {
-        throw std::runtime_error("error loading NFA");
+        throw runtime_error("error loading NFA");
     }
-    read_from_file(in);
+    read_from_file(in, final_states_map);
     in.close();
 }
 
-void Nfa::read_from_file(std::ifstream &input)
+void Nfa::read_from_file(ifstream &input,
+    map<State,set<State>> *final_states_map)
 {
     bool no_final = true;
-    std::string buf, init;
-    std::set<std::string> state_set;
-    std::map<std::string, State> state_map;
-    std::vector<TransFormat> trans;
+    string buf, init;
+    set<string> state_set;
+    map<string, State> state_map;
+    vector<TransFormat> trans;
 
     // reading initial state
-    std::getline(input, init);
+    getline(input, init);
     // setting initial state
     set_initial_state(init);
 
     // reading transitions
-    while (std::getline(input, buf)) {
-        std::istringstream iss(buf);
-        std::string s1, s2, a;
+    while (getline(input, buf)) {
+        istringstream iss(buf);
+        string s1, s2, a;
         if (!(iss >> s1 >> s2 >> a )) {
             no_final = false;
             break;
@@ -54,37 +64,37 @@ void Nfa::read_from_file(std::ifstream &input)
     set_transitions(trans);
 
     // set final states
-    std::vector<std::string> finals;
+    vector<string> finals;
     if (!no_final) {
         do {
             finals.push_back(buf);
-        } while (std::getline(input, buf));
+        } while (getline(input, buf));
     }
 
     set_final_states(finals);
 }
 
-void Nfa::set_initial_state(const std::string &init)
+void Nfa::set_initial_state(const string &init)
 {
-    initial_state = std::stoi(init);
+    initial_state = stoi(init);
 }
 
-void Nfa::set_final_states(const std::vector<std::string> &finals)
+void Nfa::set_final_states(const vector<string> &finals)
 {
     for (auto i : finals) {
-        State s = std::stoi(i);
+        State s = stoi(i);
         final_states.insert(s);
 //        transitions[s];
-//        if (transitions.find(s) == transitions.end()) std::cerr << s << "\n";
+//        if (transitions.find(s) == transitions.end()) cerr << s << "\n";
     }
 }
 
-void Nfa::set_transitions(const std::vector<TransFormat> &trans)
+void Nfa::set_transitions(const vector<TransFormat> &trans)
 {
     for (auto i : trans) {
         // XXX unsafe
-        State pstate = std::stoi(i.first);
-        State qstate = std::stoi(i.second);
+        State pstate = stoi(i.first);
+        State qstate = stoi(i.second);
         Symbol symbol = hex_to_int(i.third);
         transitions[pstate][symbol].insert(qstate);
         transitions[qstate];
@@ -92,9 +102,9 @@ void Nfa::set_transitions(const std::vector<TransFormat> &trans)
 }
 
 /// Compute predeceasing states of all states.
-std::map<State,std::set<State>> Nfa::pred() const
+map<State,set<State>> Nfa::pred() const
 {
-    std::map<State,std::set<State>> ret;
+    map<State,set<State>> ret;
     for (auto i : transitions) {
         for (auto j : i.second) {
             for (auto k : j.second) {
@@ -106,9 +116,9 @@ std::map<State,std::set<State>> Nfa::pred() const
 }
 
 /// Compute succeeding states of all states.
-std::map<State,std::set<State>> Nfa::succ() const
+map<State,set<State>> Nfa::succ() const
 {
-    std::map<State,std::set<State>> ret;
+    map<State,set<State>> ret;
     for (auto i : transitions) {
         for (auto j : i.second) {
             for (auto k : j.second) {
@@ -119,14 +129,23 @@ std::map<State,std::set<State>> Nfa::succ() const
     return ret;
 }
 
-void Nfa::merge_states(const std::map<State,State> &mapping)
+set<State> Nfa::get_states() const
+{
+    set<State> ret;
+    for (auto i : transitions) {
+        ret.insert(i.first);
+    }
+    return ret;
+}
+
+void Nfa::merge_states(const map<State,State> &mapping)
 {
     // verify mapping
     for (auto i : mapping) {
         if (!is_state(i.first) || !is_state(i.second) ||
             initial_state == i.first)
         {
-            throw std::runtime_error("cannot merge states");
+            throw runtime_error("cannot merge states");
         }
     }
 
@@ -146,7 +165,7 @@ void Nfa::merge_states(const std::map<State,State> &mapping)
         }
 
         if (is_final(merged_state)) {
-            std::cerr << i.first << " " << i.second << "\n";
+            cerr << i.first << " " << i.second << "\n";
             final_states.erase(merged_state);
             final_states.insert(src_state);
         }
@@ -158,23 +177,23 @@ void Nfa::merge_states(const std::map<State,State> &mapping)
     // redirect transitions that lead to removed states
     for (auto &states : transitions) {
         for (auto &rules : states.second) {
-            std::set<State> new_states;
+            set<State> new_states;
             for (auto i : rules.second) {
                 auto a = mapping.find(i);
                 State s = a != mapping.end() ? a->second : i;
                 new_states.insert(s);
             }
-            rules.second = std::move(new_states);
+            rules.second = move(new_states);
         }
     }
 
     clear_final_state_selfloop();
 }
 
-std::map<State,State> Nfa::get_paths() const
+map<State,State> Nfa::get_paths() const
 {
-    std::set<State> visited{initial_state};
-    std::map<State,State> ret;
+    set<State> visited{initial_state};
+    map<State,State> ret;
     // states which cannot be merged
     ret[initial_state] = initial_state;
     // find state with self-loop to self
@@ -196,9 +215,9 @@ std::map<State,State> Nfa::get_paths() const
     auto pr = pred();
     for (auto f : final_states) {
         ret[f] = f;
-        std::set<State> actual = pr[f];
+        set<State> actual = pr[f];
         while (!actual.empty()) {
-            std::set<State> next;
+            set<State> next;
             set_union(visited, actual);
             for (auto i : actual) {
                 ret[i] = f;
@@ -208,14 +227,14 @@ std::map<State,State> Nfa::get_paths() const
                     }
                 }
             }
-            actual = std::move(next);
+            actual = move(next);
         }
     }
 
     return ret;
 }
 
-void Nfa::print(std::ostream &out) const
+void Nfa::print(ostream &out) const
 {
     out << initial_state << "\n";
 
@@ -261,63 +280,19 @@ void Nfa::clear_final_state_selfloop()
         }
         if (remove) {
             transitions[f].clear();
-            //std::cerr << "now!\n";
+            //cerr << "now!\n";
         }
     }
-}
-
-std::map<State,size_t> Nfa::evaluate_states() const
-{
-    std::vector<long double> distrib(256);
-    for (auto &i : distrib) {
-        i = 1.0 / 256; //std::log2(1/256);
-    }
-    return evaluate_states(distrib);
-}
-
-std::map<State,size_t> Nfa::evaluate_states(std::vector<long double> distrib) const
-{
-    std::map<State, long double> state_freq;
-    state_freq[initial_state] = 1;
-    std::vector<State> ordered_states{initial_state};
-    auto suc = succ();
-
-    breadth_first_search([&](State s) {
-        ordered_states.push_back(s);
-        for (auto i : transitions.at(s)) {
-            for (auto j : i.second) {
-                if (j != i.first) {
-                    state_freq[j] += distrib[i.first];
-                }
-            }
-        }
-    });
-
-    long double min = 1;
-    for (auto i : ordered_states) {
-        for (auto j : suc[i]) {
-            if (i != j) {
-                state_freq[j] *= state_freq[i];
-            }
-        }
-        min = state_freq[i] < min ? state_freq[i] : min;
-        std::cerr << state_freq[i] << "\n";
-    }
-    std::map<State,size_t> ret;
-    for (auto i : state_freq) {
-        ret[i.first] = i.second * min;
-    }
-    return ret;
 }
 
 template<typename FuncType>
 void Nfa::breadth_first_search(FuncType handler) const
 {
-    std::set<State> actual{initial_state};
-    std::set<State> visited{initial_state};
+    set<State> actual{initial_state};
+    set<State> visited{initial_state};
 
     while (!actual.empty()) {
-        std::set<State> next;
+        set<State> next;
         for (auto s : actual) {
             handler(s);
             for (auto i : transitions.at(s)) {
@@ -329,13 +304,18 @@ void Nfa::breadth_first_search(FuncType handler) const
             }
         }
         set_union(visited, actual);
-        actual = std::move(next);
+        actual = move(next);
     }
 }
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // implementation of FastNfa class methods
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+FastNfa::FastNfa(const Nfa &nfa) : Nfa{nfa}
+{
+    build();
+}
 
 void FastNfa::build()
 {
@@ -345,7 +325,7 @@ void FastNfa::build()
         state_map[i.first] = cnt++;
     }
 
-    trans_vector = std::vector<std::vector<State>>(state_count() * alph_size);
+    trans_vector = vector<vector<State>>(state_count() * alph_size);
     for (auto i : transitions) {
         size_t idx_state = state_map[i.first] << shift;
         for (auto j : i.second) {
@@ -358,24 +338,25 @@ void FastNfa::build()
     }
 }
 
-void FastNfa::read_from_file(std::ifstream &input)
+void FastNfa::read_from_file(
+    ifstream &input, map<State,set<State>> *final_states_map)
 {
-    Nfa::read_from_file(input);
+    Nfa::read_from_file(input, final_states_map);
     build();
 }
 
-std::map<State,State> FastNfa::get_reversed_state_map() const
+map<State,State> FastNfa::get_reversed_state_map() const
 {
-    std::map<State,State> ret;
+    map<State,State> ret;
     for (auto i : state_map) {
         ret[i.second] = i.first;
     }
     return ret;
 }
 
-std::vector<State> FastNfa::get_final_state_idx() const
+vector<State> FastNfa::get_final_state_idx() const
 {
-    std::vector<State> ret;
+    vector<State> ret;
     for (auto i : final_states) {
         ret.push_back(state_map.at(i));
     }

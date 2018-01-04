@@ -41,13 +41,17 @@ protected:
 
 public:
     Nfa() : initial_state{0} {}
+    Nfa(const Nfa &nfa);
     ~Nfa() {}
 
-    virtual void read_from_file(std::ifstream &input);
-    void read_from_file(const char *input);
+    virtual void read_from_file(std::ifstream &input,
+        std::map<State,std::set<State>> *final_states_map = 0);
+    void read_from_file(const char *input,
+        std::map<State,std::set<State>> *final_states_map = 0);
 
     std::set<State> get_final_states() const {return final_states;}
     State get_initial_state() const {return initial_state;}
+    std::set<State> get_states() const;
     unsigned long state_count() const {return transitions.size();}
 
     bool is_state(State state) const {
@@ -62,8 +66,6 @@ public:
     std::map<State,State> get_paths() const;
     std::map<State,std::set<State>> pred() const;
     std::map<State,std::set<State>> succ() const;
-    std::map<State, size_t> evaluate_states() const;
-    std::map<State, size_t> evaluate_states(std::vector<long double> distrib) const;
     void merge_states(const std::map<State,State> &mapping);
     void print(std::ostream &out = std::cout) const;
     void clear_final_state_selfloop();
@@ -92,14 +94,17 @@ private:
 
 public:
     FastNfa() : Nfa{} {}
+    FastNfa(const Nfa &nfa);
+
     ~FastNfa() {}
 
     std::map<State,State> get_state_map() const {return state_map;}
     std::map<State,State> get_reversed_state_map() const;
     std::vector<State> get_final_state_idx() const;
     size_t get_initial_state_idx() const { return state_map.at(initial_state);}
-    virtual void read_from_file(std::ifstream &input) override;
     using Nfa::read_from_file;
+    virtual void read_from_file(std::ifstream &input,
+        std::map<State,std::set<State>> *final_states_map = 0) override;
     void build();
 
     template<typename FuncType1, typename FuncType2 = decltype(default_lambda)>
