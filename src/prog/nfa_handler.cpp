@@ -25,8 +25,6 @@
 #include "pcap_reader.hpp"
 #include "reduction.hpp"
 
-#define db(x) cerr << x << "\n"
-
 using namespace reduction;
 using namespace std;
 
@@ -68,39 +66,31 @@ struct Data {
 };
 
 const char *helpstr =
-"Usage: ./nfa_handler [COMMAND] [OPTIONS]\n"
-"General options:\n"
+"Program provides several operations with automata. The error computing,\n"
+"state labeling and reduction.\n"
+"Usage: ./nfa_handler [OPTIONS] FILE1 FILE2 ...\n"
+"options:\n"
 "  -h            : show this help and exit\n"
 "  -o <FILE>     : specify output file\n"
 "  -n <NWORKERS> : number of workers to run in parallel\n"
 "  -f <FILTER>   : define BPF filter, for syntax see man page\n"
-"\nCommands: {error, reduce, label}\n"
-"\nError Computing\n"
-"Usage: ./nfa_handlerler error [OPTIONS] TARGET REDUCED PCAPS ...\n"
-"Compute an error between 2 NFAs, denoted as TARGET and REDUCED.\n"
-"TARGET is supposed to be the input NFA and REDUCED is supposed to be an\n"
-"over-approximation of TARGET. PCAP stands for packet capture file.\n"
-"\nAutomaton Reduction\n"
-"Usage: ./nfa_hanler reduce [OPTIONS] NFA [MORE]\n"
-"Reduce the automaton using one of the following approaches: state pruning or\n"
-"GA (Genetic Algorithm).\n"
-"additional options:\n"
-"  -e <N>        : specify error, default value is 0.01\n"
-"  -r <N>        : reduce to %, this discards -e option\n"
-"  -t <TYPE>     : specify the reduction type {prune, ga, armc}.\n"
-"                  In case of prune and ga reduction the MORE argument is \n"
-"                  a file with the labeled states of the input automaton.\n"
-"                  Otherwise, it stands for pcap capture files.\n"
-"\nState Labeling\n"
-"Usage: ./nfa_hanler label NFA PCAPS ...\n"
-"Argument NFA is the input automaton. PCAPS stands for packets used for state\n"
-"labeling. This command supplies no additional options.\n\n";
-
+"  -x            : error computing, set by default, positional arguments are\n"
+"                  TARGET REDUCED PCAPS ..., where TARGET is input NFA, \n"
+"                  REDUCED denotes over-approximated reduction of TARGET and\n"
+"                  PCAPS are packet capture files\n"
+"  -l            : label NFA states with traffic, positional arguments are \n"
+"                  NFA PCAPS ...\n"
+"  -r            : NFA reduction, positional arguments are NFA\n"
+"  -e <N>        : specify reduction max. error, default value is 0.01\n"
+"  -p <N>        : reduce to %, this discards -e option, N i must be within\n"
+"                  interval (0,1)\n";
 
 // general program options
-string cmd = "";
 unsigned nworkers = 1;
 const char *filter_expr;
+bool error_opt = false;
+bool label_opt = false;
+bool reduce_opt = false;
 
 // reduction additional options
 string reduction_type = "prune";
@@ -330,7 +320,7 @@ void write_output(ostream &out, const vector<string> &pcaps)
     unsigned sec = msec / 1000 / 1000;
     unsigned min = sec / 60;
 
-    if (cmd == "label") {
+    if (label_opt) {
         out << "# Total packets : " << all_data.total << endl;
 
         out << "# Elapsed time  : " << min << "m/" << sec % 60  << "s/"
@@ -342,7 +332,7 @@ void write_output(ostream &out, const vector<string> &pcaps)
             out << state_map[i] << " " << all_data.nfa1_data[i] << "\n";
         }
     }
-    else if (cmd == "error") {
+    else if (error_opt) {
         size_t cls1 = 0, cls2 = 0;
         for (auto i : all_data.nfa1_data) {
             cls1 += i;
@@ -424,7 +414,7 @@ void write_output(ostream &out, const vector<string> &pcaps)
             << sec % 60  << "s/" << msec % 1000 << "ms\"\n";
         out << "}\n";
     }
-    else if (cmd == "reduce" && reduction_type != "armc") {
+    else if (reduce_opt) {
         cerr << "Elapsed time: " << min << "m/" << sec % 60  << "s/"
             << msec % 1000 << "ms\n";
         nfa.print(out);
@@ -448,28 +438,16 @@ int main(int argc, char **argv)
     vector<string> pcaps;
 
     const char *outfile = nullptr;
-    int opt_cnt = 2;    // program name + command
+    int opt_cnt = 1;    // program name
     int c;
-    bool reduce_options_set = false;
 
     try {
-        if (argc > 1) {
-            cmd = argv[1];
-            if (cmd == "--help" || cmd == "-h") {
-                cerr << helpstr;
-                return 0;
-            }
-            // check if command is valid
-            if (cmd != "error" && cmd != "reduce" && cmd != "label") {
-                throw runtime_error("invalid command: \"" + cmd + "\"");
-            }
-        }
-        else {
+        if (argc < 2) {
             cerr << helpstr;
             return 1;
         }
 
-        while ((c = getopt(argc, argv, "ho:n:axf:e:r:t:")) != -1) {
+        while ((c = getopt(argc, argv, "ho:n:axf:xrle:p:t:")) != -1) {
             opt_cnt++;
             switch (c) {
                 // general options
@@ -488,34 +466,43 @@ int main(int argc, char **argv)
                     filter_expr = optarg;
                     opt_cnt++;
                     break;
+                case 'r':
+                    reduce_opt = true;
+                    break;
+                case 'l':
+                    label_opt = true;
+                    break;
+                case 'x':
+                    error_opt = true;
+                    break;
                 // reduction additional options
                 case 'e':
                     opt_cnt++;
-                    reduce_options_set = 1;
                     eps = stod(optarg);
                     check_float(eps);
                     break;
-                case 'r':
+                case 'p':
                     opt_cnt++;
-                    reduce_options_set = 1;
                     reduce_ratio = stod(optarg);
                     check_float(reduce_ratio);
                     break;
                 case 't':
                     opt_cnt++;
-                    reduce_options_set = 1;
                     reduction_type = optarg;
                     break;
                 default:
                     return 1;
             }
         }
+
         // resolve conflict options
-        if ((cmd == "error" && reduce_options_set) ||
-            (cmd == "label" && reduce_options_set))
+        if ((reduce_opt && label_opt) || (error_opt && label_opt) ||
+            (error_opt && reduce_opt))
         {
             throw runtime_error("invalid combinations of arguments");
         }
+
+        error_opt = !reduce_opt && !label_opt;
 
         if (nworkers <= 0 ||
             nworkers >= thread::hardware_concurrency())
@@ -524,8 +511,8 @@ int main(int argc, char **argv)
                 "invalid number of cores \"" + to_string(nworkers) + "\"");
         }
 
-        // checking the number of positional arguments
-        int min_pos_cnt = cmd == "error" ? 3 : 2;
+        // checking the min. number of positional arguments
+        int min_pos_cnt = error_opt ? 3 : 2;
 
         if (argc - opt_cnt < min_pos_cnt)
         {
@@ -544,7 +531,7 @@ int main(int argc, char **argv)
         size_t size1 = nfa.state_count(), size2 = 1;
         state_map = nfa.get_reversed_state_map();
         // do some preparation for commands `label` and `error`
-        if (cmd == "error") {
+        if (error_opt) {
             nfa_str2 = argv[opt_cnt + 1];
             reduced.read_from_file(nfa_str2.c_str());
             final_state_idx1 = reduced.get_final_state_idx();
@@ -553,9 +540,6 @@ int main(int argc, char **argv)
             state_map2 = target.get_reversed_state_map();
             size2 = target.state_count();
             opt_cnt++;
-        }
-        else if (cmd == "label") {
-            // TODO
         }
 
         // get capture files
@@ -580,7 +564,7 @@ int main(int argc, char **argv)
         }
 
         // start computation
-        if (cmd == "reduce") {
+        if (reduce_opt) {
             reduce(pcaps);
         }
         else {
@@ -594,7 +578,7 @@ int main(int argc, char **argv)
                         {
                             Data local_data(size1, size2);
 
-                            if (cmd == "label") {
+                            if (label_opt) {
                                 process_pcaps(v[i], local_data, label_states);
                             }
                             else {
