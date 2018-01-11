@@ -1,16 +1,44 @@
-SUBDIR=src
+CXX=g++
+CXX_VERSION=$(shell $(CXX) -dumpversion)
+STD=-std=c++14
+ifeq ($(shell expr $(CXX_VERSION) '>=' 5.1), 1)
+STD=-std=c++17
+endif
 
-all: $(SUBDIR)
+SRCDIR=src
+COMMON=$(SRCDIR)/common
+PDIR=$(SRCDIR)/prog
 
-$(SUBDIR):
-	$(MAKE) -C $@
-	cp $(SUBDIR)/nfa_handler .
+CXXFLAGS=$(STD) -Wall -Wextra -pedantic -I $(COMMON) -O3 #-DNDEBUG
+LIBS=-lpcap -lpthread -lboost_system -lboost_filesystem
+PROG=nfa_handler
 
-clean:
-	rm -f nfa_error
-	$(MAKE) -C $(SUBDIR) clean
+all: nfa_handler mc
+
+SRC=$(wildcard $(COMMON)/*.cpp)
+HDR=$(wildcard $(COMMON)/*.hpp)
+OBJ=$(patsubst %.cpp, %.o, $(SRC))
+
+.PHONY: clean all
+
+nfa_handler: $(PDIR)/nfa_handler.o $(OBJ)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
+
+$(PDIR)/nfa_handler.o: $(PDIR)/nfa_handler.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
+
+mc: $(PDIR)/mc.o $(OBJ)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
+
+$(PDIR)/mc.o: $(PDIR)/mc.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
+
+%.o: %.cpp %.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
 no-data:
 	rm -f *.fa *.dot *.jpg *.json *.jsn tmp*
+	rm -f obs* tmp* *.fsm *.fa *.pa *.ba
 
-.PHONY: all clean $(SUBDIR)
+clean:
+	rm -f $(COMMON)/*.o $(PDIR)/*.o nfa_handler
