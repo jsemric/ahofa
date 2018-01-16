@@ -36,8 +36,8 @@ void Nfa::read_from_file(
     in.close();
 }
 
-void Nfa::read_from_file(ifstream &input,
-    map<State,set<State>> *final_states_map)
+void Nfa::read_from_file(
+    ifstream &input, map<State,set<State>> *final_states_map)
 {
     bool no_final = true;
     string buf, init;
@@ -211,7 +211,7 @@ map<State,State> Nfa::get_paths() const
             break;
         }
     }
-    
+
     auto pr = pred();
     for (auto f : final_states) {
         ret[f] = f;
@@ -246,7 +246,7 @@ void Nfa::print(ostream &out) const
             }
         }
     }
-    
+
     for (auto i : final_states) {
         out << i << "\n";
     }

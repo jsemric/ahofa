@@ -71,13 +71,15 @@ const char *helpstr =
 "Usage: ./nfa_handler [OPTIONS] FILE1 FILE2 ...\n"
 "options:\n"
 "  -h            : show this help and exit\n"
-"  -o <FILE>     : specify output file\n"
+"  -o <FILE>     : specify output file or directory for -s option\n"
 "  -n <NWORKERS> : number of workers to run in parallel\n"
 "  -f <FILTER>   : define BPF filter, for syntax see man page\n"
 "  -x            : error computing, set by default, positional arguments are\n"
 "                  TARGET REDUCED PCAPS ..., where TARGET is input NFA, \n"
 "                  REDUCED denotes over-approximated reduction of TARGET and\n"
 "                  PCAPS are packet capture files\n"
+"  -s            : store results to a separate file per each packet capture\n"
+"                  file\n"
 "  -l            : label NFA states with traffic, positional arguments are \n"
 "                  NFA PCAPS ...\n"
 "  -r            : NFA reduction, positional arguments are NFA\n"
@@ -91,6 +93,8 @@ const char *filter_expr;
 bool error_opt = false;
 bool label_opt = false;
 bool reduce_opt = false;
+bool store_sep = false;
+string outdir = "data/results";
 
 // reduction additional options
 string reduction_type = "prune";
@@ -271,6 +275,27 @@ void label_states(
     reached_states.nfa1_data[nfa.get_initial_state_idx()]++;
 }
 
+string gen_output_name(string nfa, string pcap)
+{
+    string base = outdir + "/" +
+                  fs::basename(nfa_str1) + "." +
+                  fs::path(pcap).filename().string() + ".";
+    string res;
+    string hash = "00000";
+    do {
+        hash[0] = '0' + (rand()%10);
+        hash[1] = '0' + (rand()%10);
+        hash[2] = '0' + (rand()%10);
+        hash[3] = '0' + (rand()%10);
+        hash[4] = '0' + (rand()%10);
+        res = base + hash + ".json";
+    } while (fs::exists(res));
+
+    return res;
+}
+
+void write_error_data(ostream &out, const Data &data, const string pcapname);
+
 template<typename Handler>
 void process_pcaps(
     const vector<string> &pcaps, Data &local_data, Handler handler)
@@ -291,6 +316,17 @@ void process_pcaps(
                     handler(local_data, payload, len);
 
                 }, filter_expr);
+
+            if (store_sep && error_opt) {
+                ofstream out(gen_output_name(nfa_str1, pcaps[i]));
+                if (out.is_open()) {
+                    write_error_data(out, local_data, pcaps[i]);
+                    out.close();
+                }
+                else {
+                    throw ofstream::failure("cannot open result file");
+                }
+            }
         }
         catch (ios_base::failure &e) {
             cerr << "\033[1;31mWARNING\033[0m " << e.what() << "\n";
@@ -313,6 +349,101 @@ void process_pcaps(
     sum_up(local_data);
 }
 
+void write_error_data(ostream &out, const Data &data, const string pcapname)
+{
+    unsigned msec = chrono::duration_cast<chrono::microseconds>(
+        chrono::steady_clock::now() - timepoint).count();
+    unsigned sec = msec / 1000 / 1000;
+    unsigned min = sec / 60;
+
+    size_t cls1 = 0, cls2 = 0;
+    for (auto i : data.nfa1_data) {
+        cls1 += i;
+    }
+    for (auto i : data.nfa2_data) {
+        cls2 += i;
+    }
+    size_t wrong_acceptances = data.accepted_reduced -
+        data.accepted_target;
+
+    float pe = wrong_acceptances * 1.0 / data.total;
+    float ce = data.wrongly_classified * 1.0 / data.total;
+    float ace = (cls1 - cls2) * 1.0 / data.total;
+    float cls_ratio = data.correctly_classified * 1.0 /
+        (data.correctly_classified + data.wrongly_classified);
+    unsigned long sc1 = target.state_count();
+    unsigned long sc2 = reduced.state_count();
+
+    out << "{\n";
+    out << "    \"target file\": \"" << nfa_str1 << "\",\n";
+    out << "    \"target\": \"" << fs::basename(nfa_str1)
+        << "\",\n";
+    out << "    \"target states\": " << sc1 << ",\n";
+    out << "    \"reduced file\": \"" << nfa_str2 << "\",\n";
+    out << "    \"reduced\": \"" << fs::basename(nfa_str2)
+        << "\",\n";
+    out << "    \"reduced states\": " << sc2 << ",\n";
+    out << "    \"reduction\": " << 1.0 * sc2 / sc1
+        << ",\n";
+    out << "    \"total packets\": " << data.total << ",\n";
+    out << "    \"accepted by target\": " << data.accepted_target
+        << ",\n";
+    out << "    \"accepted by reduced\": " << data.accepted_reduced
+        << ",\n";
+    out << "    \"wrong acceptances\": " << wrong_acceptances << ",\n";
+    out << "    \"reduced classifications\":" << cls1 << ",\n";
+    out << "    \"target classifications\": " << cls2 << ",\n";
+    out << "    \"wrong packet classifications\": "
+        << data.wrongly_classified << ",\n";
+    out << "    \"correct packet classifications\":"
+        << data.correctly_classified << ",\n";
+    out << "    \"correct packet classifications rate\":"
+        << cls_ratio << ",\n";
+    out << "    \"ace\": " << ace << ",\n";
+    out << "    \"ce\": " << ce << ",\n";
+    out << "    \"pe\": " << pe << ",\n";
+    // concrete rules results
+    out << "    \"reduced rules\": {\n";
+    for (size_t i = 0; i < final_state_idx1.size(); i++) {
+        State s = final_state_idx1[i];
+        out << "        \"q" << state_map1[s]  << "\" : "
+            << data.nfa1_data[s];
+        if (i == final_state_idx1.size() - 1) {
+            out << "}";
+        }
+        out << ",\n";
+    }
+
+    out << "    \"target rules\": {\n";
+    for (size_t i = 0; i < final_state_idx2.size(); i++) {
+        State s = final_state_idx2[i];
+        out << "        \"q" << state_map2[s]  << "\" : "
+            << data.nfa2_data[s];
+        if (i == final_state_idx2.size() - 1) {
+            out << "\n    }";
+        }
+        out << ",\n";
+    }
+
+    if (pcapname != "") {
+        out << "    \"pcap\" : \"" << pcapname << "\",\n";
+    }
+    else {
+        /*
+        out << "    \"pcaps\": [\n";
+        for (size_t i = 0; i < pcaps.size(); i++) {
+            out << "        \"" << pcaps[i] << "\"";
+            if (i == pcaps.size() - 1) {
+                out << "]";
+            }
+            out << ",\n";
+        }*/
+    }
+    out << "    \"elapsed time\": \"" << min << "m/"
+        << sec % 60  << "s/" << msec % 1000 << "ms\"\n";
+    out << "}\n";
+}
+
 void write_output(ostream &out, const vector<string> &pcaps)
 {
     unsigned msec = chrono::duration_cast<chrono::microseconds>(
@@ -333,86 +464,8 @@ void write_output(ostream &out, const vector<string> &pcaps)
         }
     }
     else if (error_opt) {
-        size_t cls1 = 0, cls2 = 0;
-        for (auto i : all_data.nfa1_data) {
-            cls1 += i;
-        }
-        for (auto i : all_data.nfa2_data) {
-            cls2 += i;
-        }
-        size_t wrong_acceptances = all_data.accepted_reduced -
-            all_data.accepted_target;
-
-        float pe = wrong_acceptances * 1.0 / all_data.total;
-        float ce = all_data.wrongly_classified * 1.0 / all_data.total;
-        float ace = (cls1 - cls2) * 1.0 / all_data.total;
-        float cls_ratio = all_data.correctly_classified * 1.0 /
-            (all_data.correctly_classified + all_data.wrongly_classified);
-        unsigned long sc1 = target.state_count();
-        unsigned long sc2 = reduced.state_count();
-
-        out << "{\n";
-        out << "    \"target file\": \"" << nfa_str1 << "\",\n";
-        out << "    \"target\": \"" << fs::basename(nfa_str1)
-            << "\",\n";
-        out << "    \"target states\": " << sc1 << ",\n";
-        out << "    \"reduced file\": \"" << nfa_str2 << "\",\n";
-        out << "    \"reduced\": \"" << fs::basename(nfa_str2)
-            << "\",\n";
-        out << "    \"reduced states\": " << sc2 << ",\n";
-        out << "    \"reduction\": " << 1.0 * sc2 / sc1
-            << ",\n";
-        out << "    \"total packets\": " << all_data.total << ",\n";
-        out << "    \"accepted by target\": " << all_data.accepted_target
-            << ",\n";
-        out << "    \"accepted by reduced\": " << all_data.accepted_reduced
-            << ",\n";
-        out << "    \"wrongly acceptances\": " << wrong_acceptances << ",\n";
-        out << "    \"reduced classifications\":" << cls1 << ",\n";
-        out << "    \"target classifications\": " << cls2 << ",\n";
-        out << "    \"wrong packet classifications\": "
-            << all_data.wrongly_classified << ",\n";
-        out << "    \"correct packet classifications\":"
-            << all_data.correctly_classified << ",\n";
-        out << "    \"correct packet classifications rate\":"
-            << cls_ratio << ",\n";
-        out << "    \"ace\": " << ace << ",\n";
-        out << "    \"ce\": " << ce << ",\n";
-        out << "    \"pe\": " << pe << ",\n";
-        // concrete rules results
-        out << "    \"reduced rules\": {\n";
-        for (size_t i = 0; i < final_state_idx1.size(); i++) {
-            State s = final_state_idx1[i];
-            out << "        \"q" << state_map1[s]  << "\" : "
-                << all_data.nfa1_data[s];
-            if (i == final_state_idx1.size() - 1) {
-                out << "}";
-            }
-            out << ",\n";
-        }
-
-        out << "    \"target rules\": {\n";
-        for (size_t i = 0; i < final_state_idx2.size(); i++) {
-            State s = final_state_idx2[i];
-            out << "        \"q" << state_map2[s]  << "\" : "
-                << all_data.nfa2_data[s];
-            if (i == final_state_idx2.size() - 1) {
-                out << "\n    }";
-            }
-            out << ",\n";
-        }
-
-        out << "    \"pcaps\": [\n";
-        for (size_t i = 0; i < pcaps.size(); i++) {
-            out << "        \"" << pcaps[i] << "\"";
-            if (i == pcaps.size() - 1) {
-                out << "]";
-            }
-            out << ",\n";
-        }
-        out << "    \"elapsed time\": \"" << min << "m/"
-            << sec % 60  << "s/" << msec % 1000 << "ms\"\n";
-        out << "}\n";
+        if (!store_sep)
+            write_error_data(out, all_data, "");
     }
     else if (reduce_opt) {
         cerr << "Elapsed time: " << min << "m/" << sec % 60  << "s/"
@@ -447,7 +500,7 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        while ((c = getopt(argc, argv, "ho:n:axf:xrle:p:t:")) != -1) {
+        while ((c = getopt(argc, argv, "ho:n:axf:xrle:p:t:s")) != -1) {
             opt_cnt++;
             switch (c) {
                 // general options
@@ -490,6 +543,9 @@ int main(int argc, char **argv)
                     opt_cnt++;
                     reduction_type = optarg;
                     break;
+                case 's':
+                    store_sep = true;
+                    break;
                 default:
                     return 1;
             }
@@ -519,12 +575,6 @@ int main(int argc, char **argv)
             throw runtime_error("invalid positional arguments");
         }
 
-        /*
-        for (int i = opt_cnt; i <= argc; i++) {
-            cout << argv[i] << "\n";
-        }
-        */
-
         // get automata
         nfa_str1 = argv[opt_cnt];
         target.read_from_file(nfa_str1.c_str());
@@ -551,9 +601,16 @@ int main(int argc, char **argv)
         // check output file
         ostream *output = &cout;
         if (outfile) {
-            output = new ofstream{outfile};
-            if (!static_cast<ofstream*>(output)->is_open()) {
-                throw runtime_error("cannot open output file");
+            if (store_sep) {
+                if (!fs::is_directory(outfile)) {
+                    throw runtime_error("invalid directory");
+                }
+            }
+            else {
+                output = new ofstream{outfile};
+                if (!static_cast<ofstream*>(output)->is_open()) {
+                    throw runtime_error("cannot open output file");
+                }
             }
         }
 

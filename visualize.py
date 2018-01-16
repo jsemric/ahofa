@@ -1,12 +1,22 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
-nfa_data = pd.read_csv('data/sprobe.csv')
-print(nfa_data.iloc[:,[x for x in range(6, 6 + 9)]])
-exit(0)
-nfa_data = pd.read_csv('data/results.csv')
-nfa_geant_data = nfa_data[nfa_data['pcap'] != 'pcaps/week1.pcap']
-plt.scatter(nfa_geant_data['reduction'], nfa_geant_data['ce'])
-plt.show()
+def plot_errors(fname):
+    df = pd.read_csv(fname)
+    # aggregate all values for each reduction
+    # plot scatter plot
+
+def main():
+    plot_errors('sprobe.csv')
+
+def pcap_analysis(fname='mc.txt'):
+    # read with mixed data type, numpy stores result in 1d structured array
+    data = np.log(np.loadtxt(open(fname,'r'), delimiter=' '))
+    plt.imshow(data, cmap='hot', interpolation='nearest')
+    plt.show()
+
+if __name__ == "__main__":
+    main()

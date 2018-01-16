@@ -104,6 +104,7 @@ def execute_batch(batch_file):
     nfa_filenames = args.input.copy()
 
     if args.reduce:
+        # compute error with newly reduced NFAs, erase old NFAs
         nfa_filenames = list()
         if args.state_labels == None:
             sys.stderr.write('Error: state frequencies are not specified\n')
@@ -116,7 +117,7 @@ def execute_batch(batch_file):
                 fname = generate_output(folder=nfadir, filename=core,
                     extension='.r' + str(i) + '.fa')
                 nfa_filenames.append(fname)
-                prog = [str(x) for x in ['./nfa_handler','reduce', j, '-t',
+                prog = [str(x) for x in ['./nfa_handler','-r', j, '-t',
                     'prune', '-r', i, '-o', fname, args.state_labels]]
                 sys.stderr.write(' '.join(prog) + '\n')
                 # invoke program for reduction
@@ -145,8 +146,11 @@ def execute_batch(batch_file):
             output = generate_output(folder=resdir, filename=core,
                 extension='.json')
 
-            prog = [str(x) for x in ['./nfa_handler', 'error', target_nfa, i,
-                '-o', output,'-n', args.nworkers]] + list(samples)
+            #prog = [str(x) for x in ['./nfa_handler', target_nfa, i,
+            #    '-o', output,'-n', args.nworkers]] + list(samples)
+            # TODO -o resdir
+            prog = [str(x) for x in ['./nfa_handler', target_nfa, i,
+                '-g','-n', args.nworkers]] + list(samples)
             sys.stderr.write(' '.join(prog) + '\n')
             # invoke program for error computation
             subprocess.call(prog)
