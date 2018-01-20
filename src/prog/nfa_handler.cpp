@@ -1,5 +1,5 @@
 /// @author Jakub Semric
-/// 2017
+/// 2018
 
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
@@ -82,7 +82,7 @@ const char *helpstr =
 "                  file\n"
 "  -l            : label NFA states with traffic, positional arguments are \n"
 "                  NFA PCAPS ...\n"
-"  -r            : NFA reduction, positional arguments are NFA\n"
+"  -r            : NFA reduction, positional arguments are NFA FREQFILE\n"
 "  -e <N>        : specify reduction max. error, default value is 0.01\n"
 "  -p <N>        : reduce to %, this discards -e option, N i must be within\n"
 "                  interval (0,1)\n";
@@ -94,7 +94,7 @@ bool error_opt = false;
 bool label_opt = false;
 bool reduce_opt = false;
 bool store_sep = false;
-string outdir = "data/results";
+string outdir = "data/prune-error";
 
 // reduction additional options
 string reduction_type = "prune";
@@ -318,13 +318,15 @@ void process_pcaps(
                 }, filter_expr);
 
             if (store_sep && error_opt) {
-                ofstream out(gen_output_name(nfa_str1, pcaps[i]));
+                auto fname = gen_output_name(nfa_str1, pcaps[i]);
+                ofstream out(fname);
                 if (out.is_open()) {
                     write_error_data(out, local_data, pcaps[i]);
                     out.close();
                 }
                 else {
-                    throw ofstream::failure("cannot open result file");
+                    throw ofstream::failure(
+                        "cannot open result file: " + fname);
                 }
             }
         }
@@ -458,9 +460,10 @@ void write_output(ostream &out, const vector<string> &pcaps)
             << msec % 1000 << "ms\n";
 
         auto state_map = nfa.get_reversed_state_map();
-        //auto state_depth = target.get_states_depth();
+        auto state_depth = target.state_depth();
         for (unsigned long i = 0; i < target.state_count(); i++) {
-            out << state_map[i] << " " << all_data.nfa1_data[i] << "\n";
+            out << state_map[i] << " " << all_data.nfa1_data[i] << " "
+                << state_depth[state_map[i]] << "\n";
         }
     }
     else if (error_opt) {

@@ -5,7 +5,7 @@ import json
 
 def main():
     all_data = []
-    for i in glob.glob('results/*.json'):
+    for i in glob.glob('prune-error/*.json'):
         with open(i,'r') as j:
             all_data.append(json.loads(j.read()))
 

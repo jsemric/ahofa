@@ -308,6 +308,33 @@ void Nfa::breadth_first_search(FuncType handler) const
     }
 }
 
+map<State,unsigned> Nfa::state_depth() const
+{
+    set<State> actual{initial_state};
+    set<State> visited{initial_state};
+    unsigned depth = 0;
+    map<State,unsigned> ret;
+
+    while (!actual.empty()) {
+        set<State> next;
+        for (auto s : actual) {
+            ret[s] = depth;
+            for (auto i : transitions.at(s)) {
+                for (auto j : i.second) {
+                    if (visited.find(j) == visited.end()) {
+                        next.insert(j);
+                    }
+                }
+            }
+        }
+        depth++;
+        set_union(visited, actual);
+        actual = move(next);
+    }
+
+    return ret;
+}
+
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // implementation of FastNfa class methods
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

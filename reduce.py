@@ -71,7 +71,7 @@ def generate_output(*, folder, filename, extension):
 def execute_batch(batch_file):
     snortdir= 'min-snort'
     nfadir = 'data/nfa'
-    resdir = 'data/results'
+    resdir = 'data/prune'
 
     parser = argparse.ArgumentParser()
     # general
@@ -117,8 +117,8 @@ def execute_batch(batch_file):
                 fname = generate_output(folder=nfadir, filename=core,
                     extension='.r' + str(i) + '.fa')
                 nfa_filenames.append(fname)
-                prog = [str(x) for x in ['./nfa_handler','-r', j, '-t',
-                    'prune', '-r', i, '-o', fname, args.state_labels]]
+                prog = [str(x) for x in ['./nfa_handler','-r', j,
+                    '-p', i, '-o', fname, args.state_labels]]
                 sys.stderr.write(' '.join(prog) + '\n')
                 # invoke program for reduction
                 subprocess.call(prog)
@@ -150,7 +150,7 @@ def execute_batch(batch_file):
             #    '-o', output,'-n', args.nworkers]] + list(samples)
             # TODO -o resdir
             prog = [str(x) for x in ['./nfa_handler', target_nfa, i,
-                '-g','-n', args.nworkers]] + list(samples)
+                '-s','-n', args.nworkers]] + list(samples)
             sys.stderr.write(' '.join(prog) + '\n')
             # invoke program for error computation
             subprocess.call(prog)

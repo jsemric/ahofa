@@ -69,6 +69,7 @@ public:
     void merge_states(const std::map<State,State> &mapping);
     void print(std::ostream &out = std::cout) const;
     void clear_final_state_selfloop();
+    std::map<State,unsigned> state_depth() const;
 
     template<typename FuncType>
     void breadth_first_search(FuncType handler) const;
