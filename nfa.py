@@ -163,27 +163,38 @@ class Nfa:
         # TODO retrieve final states labels
         symbol = 257
         new_state_id = max(self.states) + 1
+        mapping = dict()
         new_finals = set()
-        old_final_states = self._final_states.copy()
+
         for fin in self._final_states:
             self._transitions[fin][symbol].add(new_state_id)
+            mapping[symbol] = fin
             self._transitions[new_state_id] = defaultdict(set)
             new_finals.add(new_state_id)
             new_state_id += 1
             symbol += 1
 
         self._final_states = new_finals
-        return old_final_states
+        return mapping
 
-    def retrieve_final_states(self):
-        # TODO retrieve final states labels
+    def retrieve_final_states(self, mapping=None):
         pred = self.pred
-        to_remove = self._final_states.copy()
-        self._final_states = set()
-        for fin in to_remove:
-            self._final_states |= pred[fin]
+        final_state = self._final_states.pop()
+        assert len(self._final_states) == 0
 
-        self.remove_states(to_remove)
+        for fin in pred[final_state]:
+            assert len(self._transitions[fin]) == 1
+            symbol, states = self._transitions[fin].popitem()
+            assert len(states) == 1
+            self._final_states.add(fin)
+            if mapping:
+                mapping[fin] = mapping[symbol]
+                del mapping[symbol]
+
+        # remove old final states
+        del self._transitions[final_state]
+
+
         
 
     def divide_to_rules(self):
@@ -331,8 +342,25 @@ class Nfa:
                         states.discard(state)
                         states.add(mapping[state])
 
-        self.clear_final_state_selfloop()
+        if not clear_finals:
+            self.clear_final_state_selfloop()
         assert len(set(self._transitions.keys()) & set(mapping.keys())) == 0
+
+    def rename_states(self, mapping):
+        trans = self._transitions
+        for p, q in mapping.items():
+            trans[q] = trans[p].copy()
+            del trans[p]
+
+        for state, rules in trans.items():
+            for symbol, states in rules.items():
+                for state in states.copy():
+                    if state in mapping:
+                        states.discard(state)
+                        states.add(mapping[state])
+        self._final_states = set(
+            [mapping[x] if x in mapping else x
+            for x in self._final_states.copy()])
 
     ###########################################################################
     # IO METHODS

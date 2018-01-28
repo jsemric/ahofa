@@ -223,8 +223,6 @@ def main():
         exit(0)
 
     if args.command == 'min':
-        #aut = Nfa.parse(args.input, 'ba')
-        #return
         jarfile = search_for_file('Reduce.jar')
         if jarfile == None:
             sys.stderr.write(
@@ -237,15 +235,24 @@ def main():
         reduce_file = tempfile.NamedTemporaryFile()
 
         aut = Nfa.parse(args.input, 'fa')
-        aut.extend_final_states()
+        mapping = aut.extend_final_states()
         write_output(ba_file.name, aut.write(how='ba'))
 
         proc = "java -jar " + jarfile + " " + ba_file.name + \
         " 10 -sat -finite -o " + reduce_file.name
         subprocess.call(proc.split())
-
         aut = Nfa.parse(reduce_file.name, 'ba')
-        aut.retrieve_final_states()
+
+        aut.retrieve_final_states(mapping)
+        # rename states
+        max_label = max(aut.states) + 1
+        vals = set(mapping.values())
+        for s in aut.states:
+            if s in vals:
+                mapping[s] = max_label
+                max_label += 1
+
+        aut.rename_states(mapping)
         write_output(args.output, aut.write())
     elif args.command == 'issubset':
         jarfile = search_for_file('RABIT.jar')
