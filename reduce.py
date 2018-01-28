@@ -24,31 +24,6 @@ def search_for_file(fname):
             return os.path.join(root, fname)
     return None
 
-def ba_to_fa_format(input, output):
-    with open(output,'w') as f1:
-        with open(input,'r') as f2:
-            for line in f2:
-                if ',' in line:
-                    a,s1,s2 = re.split('(?:,|->)\s*', line[:-1])
-                    f1.write(s1[1:-1] + ' ' + s2[1:-1] + ' ' + a + '\n')
-                else:
-                    f1.write(line[1:-2] + '\n')
-
-def fa_to_ba_format(input, output):
-    with open(output,'w') as f1:
-        with open(input,'r') as f2:
-            for line in f2:
-                if ' ' in line:
-                    s1, s2, a = line.split()
-                    f1.write(a + ',[' + s1 + ']' + '->[' + s2 + ']\n')
-                else:
-                    f1.write('[' + line[:-1] + ']\n')
-
-def nfa_to_ba(aut, output):
-    with open(output, 'w') as f:
-        for i in Nfa.fa_to_ba(aut.write_fa()):
-            f.write(i)
-
 def get_freq(fname):
     ret = {}
     with open(fname, 'r') as f:
@@ -59,7 +34,6 @@ def get_freq(fname):
                 ret[int(state)] = int(freq)
 
     return ret
-
 
 def generate_output(*, folder, filename, extension):
     # generating filename
@@ -249,6 +223,8 @@ def main():
         exit(0)
 
     if args.command == 'min':
+        #aut = Nfa.parse(args.input, 'ba')
+        #return
         jarfile = search_for_file('Reduce.jar')
         if jarfile == None:
             sys.stderr.write(
@@ -259,41 +235,46 @@ def main():
             exit(1)
         ba_file = tempfile.NamedTemporaryFile()
         reduce_file = tempfile.NamedTemporaryFile()
-        fa_to_ba_format(args.input, ba_file.name)
+
+        aut = Nfa.parse(args.input, 'fa')
+        aut.extend_final_states()
+        write_output(ba_file.name, aut.write(how='ba'))
 
         proc = "java -jar " + jarfile + " " + ba_file.name + \
         " 10 -sat -finite -o " + reduce_file.name
-
         subprocess.call(proc.split())
-        ba_to_fa_format(reduce_file.name, args.output)
+
+        aut = Nfa.parse(reduce_file.name, 'ba')
+        aut.retrieve_final_states()
+        write_output(args.output, aut.write())
     elif args.command == 'issubset':
         jarfile = search_for_file('RABIT.jar')
         if jarfile == None:
             sys.stderr.write(
                 'Error: cannot find RABIT tool in this directory\n')
             sys.exit(1)
-        aut1 = Nfa.parse_fa(args.NFA1)
-        aut2 = Nfa.parse_fa(args.NFA2)
+        aut1 = Nfa.parse(args.NFA1)
+        aut2 = Nfa.parse(args.NFA2)
         aut1.selfloop_to_finals()
         aut2.selfloop_to_finals()
         aut1_ba = tempfile.NamedTemporaryFile()
         aut2_ba = tempfile.NamedTemporaryFile()
-        nfa_to_ba(aut1, aut1_ba.name)
-        nfa_to_ba(aut2, aut2_ba.name)
+        aut1.print(open(aut1_ba.name,'w'), how='ba')
+        aut2.print(open(aut2_ba.name,'w'), how='ba')
 
         proc = 'java -jar ' + jarfile + ' ' + aut1_ba.name + ' ' + \
         aut2_ba.name + ' -fast -finite'
         subprocess.call(proc.split())
     elif args.command == 'lmin':
-        aut = Nfa.parse_fa(args.input)
+        aut = Nfa.parse(args.input)
         aut.lightweight_minimization()
-        gen = aut.write_fa()
+        gen = aut.write()
         write_output(args.output, gen)
     elif args.command == 'dot':
         freq = None
         if args.freq:
             freq = get_freq(args.freq)
-        aut = Nfa.parse_fa(args.input)
+        aut = Nfa.parse(args.input)
         gen = aut.write_dot(args.trans, freq)
         fname = args.output if args.output else 'dot'
         write_output(fname, gen)
@@ -312,7 +293,7 @@ def main():
             print('packets frequency top ', args.topn)
             print('packets\t\tstates\t\tpct%')
         else:
-            aut = Nfa.parse_fa(args.input)
+            aut = Nfa.parse(args.input)
             state_cnt = aut.state_count
             if args.depth:
                 dc = aut.state_depth
@@ -364,11 +345,11 @@ def main():
             plt.hist(vals)
         plt.show()
     elif args.command == 'reduce':
-        aut = Nfa.parse_fa(args.input)
+        aut = Nfa.parse(args.input)
         reduction = PruneReduction(aut, 0.3)
         reduction.evaluate_states(filename=args.freq)
         reduction.reduce()
-        gen = aut.write_fa()
+        gen = aut.write()
         write_output(args.output, gen)
     else:
         assert False

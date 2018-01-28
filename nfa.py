@@ -13,14 +13,40 @@ def rgb(maximum, minimum, value):
     g = 255 - b - r
     return r, g, b
 
+def sanitize_labels(labels):
+    if len(labels) == 0:
+        return "e"
+    elif len(labels) == 1:
+        return hex(labels[0])
+
+    last = labels[0]
+    res = hex(labels[0])
+    in_seq = 0
+    for i in labels[1:]:
+        if last == i - 1:
+            in_seq += 1
+        else:
+            if in_seq > 0:
+                res += '-' + hex(last)
+            in_seq = 0
+            res += ',' + hex(i)
+        last = i
+
+    if in_seq:
+        res += '-' + hex(last)
+
+    return res
+
 class NfaError(Exception):
     pass
 
 class Nfa:
 
     # regex for the parsing
-    RE_transition_FA_format = re.compile('^\w+\s+\w+\s+\w+$')
-    RE_state_FA_format = re.compile('^\w+$')
+    regex_trans_fa = re.compile('^\w+\s+\w+\s+\w+$')
+    regex_state_fa = re.compile('^\w+$')
+    regex_trans_ba = re.compile('^\w+,\s*\[\w+\]->\s*\[\w+\]$')
+    regex_state_ba = re.compile('^\[\w+\]$')
 
     def __init__(self):
         self._transitions = dict(defaultdict(set))
@@ -103,10 +129,8 @@ class Nfa:
     def _add_rule(self, pstate, qstate, symbol):
         self._add_state(pstate)
         self._add_state(qstate)
-        if 0 <= symbol <= 255:
-            self._transitions[pstate][symbol].add(qstate)
-        else:
-            raise NfaError('invalid rule format: ' + str(symbol))
+        self._transitions[pstate][symbol].add(qstate)
+
 
     def _add_initial_state(self, istate):
         self._add_state(istate)
@@ -136,11 +160,33 @@ class Nfa:
         return not sum(alph)
 
     def extend_final_states(self):
-        # TODO
-        pass
+        # TODO retrieve final states labels
+        symbol = 257
+        new_state_id = max(self.states) + 1
+        new_finals = set()
+        old_final_states = self._final_states.copy()
+        for fin in self._final_states:
+            self._transitions[fin][symbol].add(new_state_id)
+            self._transitions[new_state_id] = defaultdict(set)
+            new_finals.add(new_state_id)
+            new_state_id += 1
+            symbol += 1
+
+        self._final_states = new_finals
+        return old_final_states
+
+    def retrieve_final_states(self):
+        # TODO retrieve final states labels
+        pred = self.pred
+        to_remove = self._final_states.copy()
+        self._final_states = set()
+        for fin in to_remove:
+            self._final_states |= pred[fin]
+
+        self.remove_states(to_remove)
+        
 
     def divide_to_rules(self):
-        # TODO
         succ = self.succ
         pred = self.pred
         rules_all = []
@@ -293,88 +339,101 @@ class Nfa:
     ###########################################################################
 
     @classmethod
-    def parse_fa(cls, fname):
+    def parse(cls, fname, how='fa'):
+        if not how in ['fa','ba']:
+            raise NfaError('invalid nfa format')
         out = Nfa()
         with open(fname, 'r') as f:
-            out.read_fa(f)
+            out.read(f, how)
 
         return out
 
-    def read_fa(self, f):
+    def read(self, fdesc, how='fa'):
         rules = 0
-        for line in f:
+        trans_regex = getattr(Nfa, 'regex_trans_' + how)
+        state_regex = getattr(Nfa, 'regex_state_' + how)
+        for line in fdesc:
             # erase new line at the end of the string
             if line[-1] == '\n':
                 line = line[:-1]
 
             if rules == 0:
                 # read initial state
-                if Nfa.RE_state_FA_format.match(line):
+                if state_regex.match(line):
+                    if how == 'ba':
+                        line = re.sub('[\[\]]', '', line)
                     self._add_initial_state(int(line))
                     rules = 1
                 else:
                     raise RuntimeError('invalid syntax: \"' + line + '\"')
             elif rules == 1:
                 # read transitions
-                if Nfa.RE_transition_FA_format.match(line):
-                    p, q, a = line.split()
+                if trans_regex.match(line):
+                    if how == 'ba':
+                        line = re.sub('[\[\,\->\]]', ' ', line)
+                        a, p, q = line.split()
+                    else:
+                        p, q, a = line.split()
                     p = int(p)
                     q = int(q)
                     a = int(a,0)
                     self._add_rule(p,q,a)
-                elif Nfa.RE_state_FA_format.match(line):
+                elif state_regex.match(line):
+                    if how == 'ba':
+                        line = re.sub('[\[\]]', '', line)
                     self._add_final_state(int(line))
                     rules = 2
                 else:
                     raise RuntimeError('invalid syntax: \"' + line + '\"')
             else:
-                if Nfa.RE_state_FA_format.match(line):
+                if state_regex.match(line):
+                    if how == 'ba':
+                        line = re.sub('[\[\]]', '', line)
                     self._add_final_state(int(line))
                 else:
                     raise RuntimeError('invalid syntax: \"' + line + '\"')
 
-    @classmethod
-    def ba_to_fa(cls, data):
-        for line in data:
-            if ',' in line:
-                a,s1,s2 = re.split('(?:,|->)\s*', line[:-1])
-                yield s1[1:-1] + ' ' + s2[1:-1] + ' ' + a + '\n'
-            else:
-                yield line[1:-2] + '\n'
+    def write(self, *, how='fa'):
+        if how == 'fa':
+            yield str(self._initial_state) + '\n'
+        elif how == 'ba':
+            yield '[' + str(self._initial_state) + ']\n'
+        else:
+            raise NfaError('fa, dot or ba') # TODO
 
-    @classmethod
-    def fa_to_ba(cls, data):
-        for line in data:
-            if ' ' in line:
-                s1, s2, a = line.split()
-                yield a + ',[' + s1 + ']' + '->[' + s2 + ']\n'
-            else:
-                yield '[' + line[:-1] + ']\n'
-
-    def write_fa(self):
-        yield str(self._initial_state) + '\n'
         for state, rules in self._transitions.items():
             for key, value in rules.items():
                 for q in value:
-                    yield '{} {} {}\n'.format(state, q, hex(key))
+                    if how == 'ba':
+                        yield '{},[{}]->[{}]\n'.format(hex(key), state, q)
+                    else:
+                        yield '{} {} {}\n'.format(state, q, hex(key))
+                        
         for qf in self._final_states:
-            yield '{}\n'.format(qf)
+            if how == 'ba':
+                yield '[{}]\n'.format(qf)
+            else:
+                yield '{}\n'.format(qf)
 
-    def print_fa(self, f=None):
-        for line in self.write_fa():
+    def print(self, f=None, *, how='fa'):
+        for line in self.write(how=how):
             print(line, end='', file=f)
 
     def write_dot(self, show_trans=False, freq=None,*,states=None):
+        if states == None:
+            states = self.states
         yield 'digraph NFA {\n \
         rankdir=LR;size="8,5"\n \
         graph [ dpi = 1000 ]\n'
+
+        # display frequencies as heat map
         if freq:
             freq[self._initial_state] = max(freq.values())
             heatmap = {state:int(math.log2(f + 2)) for state, f in freq.items()}
             _max = max(heatmap.values())
             _min = min( heatmap.values())
             heatmap[self._initial_state] = _max
-            for state in self.states:
+            for state in states:
                 if state in self._final_states:
                     shape = "doublecircle"
                 else:
@@ -391,41 +450,20 @@ class Nfa:
         yield 'qi -> q' + str(self._initial_state) + ';\n'
 
         succ = self.succ
-        for state in self.states:
+        # display transitions
+        for state in states:
             for s in succ[state]:
                 yield ' '.join(('q' + str(state), '->', 'q' + str(s)))
+                # display labels
                 if show_trans:
                     labels = []
-                    for symbol, states in self._transitions[state].items():
-                        if s in states:
+                    for symbol, _states in self._transitions[state].items():
+                        if s in _states:
                             labels.append(symbol)
                     yield ' [ label="' + sanitize_labels(labels) + '"]'
                 yield ";\n"
 
         yield '}\n'
-
-    def sanitize_labels(labels):
-        if len(labels) == 0:
-            return "e"
-
-        last = labels[0] - 1
-        res = hex(labels[0])
-        in_inerval = False
-        for i in labels:
-            if last == i - 1:
-                in_interval = True
-            else:
-                in_interval = False
-                res += '-' + hex(last) + ','
-                res += hex(i)
-            last = i
-
-        if len(labels) > 1:
-            if in_interval:
-                res += '-' + hex(last)
-
-        return res
-
 
     def print_dot(self, f=None):
         for line in self.write_dot():
