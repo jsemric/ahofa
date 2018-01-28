@@ -13,8 +13,12 @@ def rgb(maximum, minimum, value):
     g = 255 - b - r
     return r, g, b
 
+class NfaError(Exception):
+    pass
+
 class Nfa:
 
+    # regex for the parsing
     RE_transition_FA_format = re.compile('^\w+\s+\w+\s+\w+$')
     RE_state_FA_format = re.compile('^\w+$')
 
@@ -29,9 +33,14 @@ class Nfa:
 
     @property
     def generator(self):
+        ret = set()
         for s in self.succ[self._initial_state]:
             if self._has_path_over_alph(s, s):
-                return s
+                ret.add(s)
+        if len(ret) == 1:
+            return ret.pop()
+        else:
+            return ret
 
     @property
     def state_count(self):
@@ -97,7 +106,7 @@ class Nfa:
         if 0 <= symbol <= 255:
             self._transitions[pstate][symbol].add(qstate)
         else:
-            raise RuntimeError('Invalid rule format')
+            raise NfaError('invalid rule format: ' + str(symbol))
 
     def _add_initial_state(self, istate):
         self._add_state(istate)
@@ -108,25 +117,13 @@ class Nfa:
         self._final_states.add(fstate)
 
     ###########################################################################
-    # NFA MANUPULATION
+    # NFA MANUPULATION, STATS, ETC.
     ###########################################################################
 
     def selfloop_to_finals(self):
         for state in self._final_states:
             for c in range(256):
                 self._transitions[state][c] = set([state])
-
-
-    def remove_states(self, state_set):
-        assert(not self._initial_state in state_set)
-        for state, rules in self._transitions.copy().items():
-            if state in state_set:
-                del self._transitions[state]
-            else:
-                for symbol, states in rules.items():
-                    self._transitions[state][symbol] = states - state_set
-
-        self._final_states -= state_set
 
     def _has_path_over_alph(self, state1, state2):
         alph = [1 for x in range(256)]
@@ -137,6 +134,74 @@ class Nfa:
                 return False
 
         return not sum(alph)
+
+    def extend_final_states(self):
+        # TODO
+        pass
+
+    def divide_to_rules(self):
+        # TODO
+        succ = self.succ
+        pred = self.pred
+        rules_all = []
+        gen = self.generator
+
+        if type(gen) != type(2):
+            raise NfaError(
+                'version with multiple or none self-loop states has not been '
+                'implemented')
+
+        for state in succ[gen] - set([gen]):
+            # exclude states with predecessors different from initial
+            # and generator
+            not_first = False
+            for s in pred[state]:
+                if not self._has_path_over_alph(s,s) and \
+                    not s == self._initial_state:
+                    not_first = True
+                    break
+            if not_first:
+                continue
+
+            # find all states in the rule
+            rule = set([state])
+            actual = set([state])
+            while actual:
+                successors = set()
+                for s in actual:
+                    successors |= succ[s]
+
+                actual = successors - rule
+                rule |= successors
+
+            rules_all.append(rule)
+
+        return rules_all
+
+    def neigh_count(self, selfloops=False):
+        dc = {}
+
+        for state, suc in self.succ.items():
+            if selfloops == False:
+                suc.discard(state)
+            dc[state] = len(suc)
+
+        return dc
+
+
+    def remove_states(self, to_remove):
+        if self._initial_state in to_remove:
+            raise NfaError('cannot remove initial state')
+
+        for state, rules in self._transitions.copy().items():
+            if state in to_remove:
+                del self._transitions[state]
+            else:
+                for symbol, states in rules.items():
+                    self._transitions[state][symbol] = states - to_remove
+
+        self._final_states -= to_remove
+
 
     def lightweight_minimization(self, collapse_finals=False):
         '''
@@ -169,11 +234,14 @@ class Nfa:
         return self.remove_unreachable()
 
     def collapse_final_states(self):
-        self.prune(self._final_states.copy())
+        self.merge_states()
 
-    def clear_final_state_transitions(self):
+    def clear_final_state_selfloop(self):
+        trans = self._transitions
         for fstate in self._final_states:
-            self._transitions[fstate] = (defaultdict(set))
+            for c in range(256):
+                if c in trans[fstate].keys():
+                    trans[fstate][c].discard(fstate)
 
     def remove_unreachable(self):
         succ = self.succ
@@ -188,39 +256,37 @@ class Nfa:
 
         self.remove_states(set([s for s in self.states if s not in reached]))
 
-    def prune(self, to_prune):
-        final_state_label = max(self.states) + 1
-        self._add_final_state(final_state_label)
+    def merge_states(self, mapping, *, merge_finals=False, clear_finals=True):
+        trans = self._transitions
+        finals = self._final_states
+        # redirect transitions from removed states
+        # merge i.first to i.second
+        for merged, src in mapping.items():
+            # senseless merging state to itself
+            if merged == src:
+                continue
+            if merge_finals:
+                if merged in finals:
+                    raise NfaError(
+                        'cannot merge the final state: ' + str(merged))
+                else:
+                    finals.add(src)
 
-        for state in to_prune | self._final_states.copy():
-            self.merge_states(final_state_label, state)
+            if not clear_finals and not src in finals:
+                for symbol, states in trans[merged].items():
+                    trans[src][symbol] |= states
+            del trans[merged]
 
-        self.clear_final_state_transitions()
+        # redirect transitions that led to removed states
+        for state, rules in trans.items():
+            for symbol, states in rules.items():
+                for state in states.copy():
+                    if state in mapping:
+                        states.discard(state)
+                        states.add(mapping[state])
 
-
-    def merge_states(self, pstate, qstate):
-        if pstate == qstate:
-            return
-        # redirect all rules with qstate on left side to pstate
-        for symbol, states in self._transitions[qstate].items():
-            for s in states:
-                self._transitions[pstate][symbol].add(s)
-
-        # redirect all rules with qstate on right side to pstate
-        pred = self.pred[qstate]
-        for state in pred:
-            for symbol, states in self._transitions[state].items():
-                if qstate in states:
-                    self._transitions[state][symbol].discard(qstate)
-                    self._transitions[state][symbol].add(pstate)
-
-        # check if collapsed state is final one
-        if qstate in self._final_states:
-            self._final_states.discard(qstate)
-            self._final_states.add(pstate)
-
-        # remove state
-        del self._transitions[qstate]
+        self.clear_final_state_selfloop()
+        assert len(set(self._transitions.keys()) & set(mapping.keys())) == 0
 
     ###########################################################################
     # IO METHODS
@@ -298,7 +364,7 @@ class Nfa:
         for line in self.write_fa():
             print(line, end='', file=f)
 
-    def write_dot(self, show_trans=False, freq=None):
+    def write_dot(self, show_trans=False, freq=None,*,states=None):
         yield 'digraph NFA {\n \
         rankdir=LR;size="8,5"\n \
         graph [ dpi = 1000 ]\n'
@@ -315,9 +381,7 @@ class Nfa:
                     shape = 'circle'
                 r,g,b = rgb(_max, _min, heatmap[state])
                 color = "#%0.2X%0.2X%0.2X" % (r, g, b)
-#                yield 'node [' +  shape + 'style=filled, fillcolor="' + color + '", label="'+str(heatmap[state])+ '"];'
                 yield 'node [shape={},style=filled,fillcolor="{}",label="{}"];q{}\n'.format(shape, color, freq[state],state)
-#                yield 'q' + str(state) + '\n'
         else:
             yield '{node [shape = doublecircle, style=filled, fillcolor=red];'
             yield ';'.join(['q' + str(qf) for qf in self._final_states]) + '\n'
@@ -335,14 +399,14 @@ class Nfa:
                     for symbol, states in self._transitions[state].items():
                         if s in states:
                             labels.append(symbol)
-                    yield ' [ label="' + self.sanitize_labels(labels) + '"]'
+                    yield ' [ label="' + sanitize_labels(labels) + '"]'
                 yield ";\n"
 
         yield '}\n'
 
-    def sanitize_labels(self, labels):
+    def sanitize_labels(labels):
         if len(labels) == 0:
-            return "け"
+            return "e"
 
         last = labels[0] - 1
         res = hex(labels[0])

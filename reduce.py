@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Jakub Semric 2018
 # automation of reduction, error computing and state labeling
 
 import sys
@@ -10,8 +11,12 @@ import re
 import datetime
 import glob
 import random
+import math
+import matplotlib.pyplot as plt
+from collections import defaultdict
 
-import aux_scripts.nfa as nfa
+from nfa import Nfa
+from reduction import PruneReduction
 
 def search_for_file(fname):
     for root, dirs, files in os.walk('.'):
@@ -41,7 +46,7 @@ def fa_to_ba_format(input, output):
 
 def nfa_to_ba(aut, output):
     with open(output, 'w') as f:
-        for i in nfa.Nfa.fa_to_ba(aut.write_fa()):
+        for i in Nfa.fa_to_ba(aut.write_fa()):
             f.write(i)
 
 def get_freq(fname):
@@ -182,6 +187,13 @@ def main():
     subparser = parser.add_subparsers(
         help='command', dest='command')
 
+    # reduction
+    reduce_parser = subparser.add_parser(
+        'reduce', help='NFA reduction',
+        parents = [general_parser, nfa_input_parser])
+    reduce_parser.add_argument(
+        '-f','--freq',type=str,help='packets frequencies')
+
     # rabit tool
     rabit_parser = subparser.add_parser(
         'issubset', help='if L(NFA1) is subset of L(NFA2)',
@@ -190,7 +202,7 @@ def main():
     rabit_parser.add_argument('NFA2', type=str)
 
     # reduce tool
-    reduce_parser = subparser.add_parser(
+    min_parser = subparser.add_parser(
         'min', help='minimizes NFA by bisimulation',
         parents = [general_parser, nfa_input_parser])
 
@@ -202,12 +214,29 @@ def main():
     dot_parser.add_argument(
         '-t', '--trans', action='store_true',
         help='show transition labels')
-    dot_parser.add_argument('-s', '--show', action='store_true', help='show result')
+    dot_parser.add_argument(
+        '-s', '--show', action='store_true', help='show result')
 
     # light-weight minimization
     lmin_parser = subparser.add_parser(
         'lmin', help='minimizes NFA by light-weight minimization',
         parents = [general_parser, nfa_input_parser])
+
+    # some statistics about the NFA
+    nfastats_parser = subparser.add_parser(
+        'stats', help='prints some statistics about the automaton',
+        parents = [general_parser, nfa_input_parser])
+    nfastats_parser.add_argument(
+        '-f','--freq', action='store_true', help='packet frequency histogram')
+    nfastats_parser.add_argument(
+        '-d','--depth', action='store_true', help='state depth histogram')
+    nfastats_parser.add_argument(
+        '-m','--max', type=int, help='maximal boundary value to display')
+    nfastats_parser.add_argument(
+        '-t','--topn', type=int, help='show top N statistics', metavar='N',
+        default=5)
+    nfastats_parser.add_argument(
+        '-r','--rules', action='store_true', help='show top N statistics')
 
     args = parser.parse_args()
     if args.command == None and args.batch == None:
@@ -243,8 +272,8 @@ def main():
             sys.stderr.write(
                 'Error: cannot find RABIT tool in this directory\n')
             sys.exit(1)
-        aut1 = nfa.Nfa.parse_fa(args.NFA1)
-        aut2 = nfa.Nfa.parse_fa(args.NFA2)
+        aut1 = Nfa.parse_fa(args.NFA1)
+        aut2 = Nfa.parse_fa(args.NFA2)
         aut1.selfloop_to_finals()
         aut2.selfloop_to_finals()
         aut1_ba = tempfile.NamedTemporaryFile()
@@ -256,7 +285,7 @@ def main():
         aut2_ba.name + ' -fast -finite'
         subprocess.call(proc.split())
     elif args.command == 'lmin':
-        aut = nfa.Nfa.parse_fa(args.input)
+        aut = Nfa.parse_fa(args.input)
         aut.lightweight_minimization()
         gen = aut.write_fa()
         write_output(args.output, gen)
@@ -264,9 +293,9 @@ def main():
         freq = None
         if args.freq:
             freq = get_freq(args.freq)
-        aut = nfa.Nfa.parse_fa(args.input)
+        aut = Nfa.parse_fa(args.input)
         gen = aut.write_dot(args.trans, freq)
-        fname = args.output if args.output else 'nfa.dot'
+        fname = args.output if args.output else 'dot'
         write_output(fname, gen)
         if args.show:
             image = fname.split('.dot')[0] + '.jpg'
@@ -274,7 +303,75 @@ def main():
             subprocess.call(prog.split())
             prog = 'xdg-open ' + image
             subprocess.call(prog.split())
+    elif args.command == 'stats':
+        if args.freq:
+            dc = get_freq(args.input)
+            state_cnt = len(dc)
+            plt.xlabel('number of packets')
+            plt.ylabel('number of states')
+            print('packets frequency top ', args.topn)
+            print('packets\t\tstates\t\tpct%')
+        else:
+            aut = Nfa.parse_fa(args.input)
+            state_cnt = aut.state_count
+            if args.depth:
+                dc = aut.state_depth
+                plt.xlabel('depth')
+                plt.ylabel('states')
+                print('depth count top ', args.topn)
+                print('depth\t\tstates\t\tpct%')
+            elif args.rules:
+                rules = aut.divide_to_rules()
+                total = 0
+                for rule in rules:
+                    print(rule)
+                    total += len(rule)
+                print('total: {} rules:{}'.format(aut.state_count,total))
+                return
+            else:
+                dc = aut.neigh_count()
+                plt.xlabel('number of neighbors')
+                plt.ylabel('number of states')
+                print('neighbors count top ', args.topn)
+                print('neighbors\tstates\t\tpct%')
 
+        # textual stats about distribution
+        dist = defaultdict(int)
+        for i in dc.values():
+            dist[i] += 1
+
+        srt_keys = sorted(dist.keys(),key=lambda x: -dist[x])
+        total = 0
+        total_pct=0
+
+        print('='*40)
+        for i in range(min(len(srt_keys), args.topn)):
+            n_neigh = srt_keys[i]
+            cnt = dist[n_neigh]
+            total += cnt
+            pct = round(100 * cnt / state_cnt, 2)
+            total_pct += pct
+            print('{}\t\t{}\t\t{}'.format(n_neigh, cnt, pct))
+
+        print('='*40)
+        print('\t\t{}\t\t{}'.format(total,round(total_pct,2)))
+
+        # plot a histogram
+        vals = list(dc.values())
+        if args.max:
+            plt.hist(vals, range=(0,args.max))
+        else:
+            plt.hist(vals)
+        plt.show()
+    elif args.command == 'reduce':
+        aut = Nfa.parse_fa(args.input)
+        reduction = PruneReduction(aut, 0.3)
+        reduction.evaluate_states(filename=args.freq)
+        reduction.reduce()
+        gen = aut.write_fa()
+        write_output(args.output, gen)
+    else:
+        assert False
 
 if __name__ == "__main__":
     main()
