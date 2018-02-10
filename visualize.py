@@ -37,12 +37,13 @@ def plot_errors(fname):
     plt.show()
 
 def main():
-    plot_errors('data/sprobe.csv')
-#    pcap_analysis()
+#    plot_errors('data/sprobe.csv')
+    pcap_analysis()
 
 def pcap_analysis(fname='mc.txt'):
     # read with mixed data type, numpy stores result in 1d structured array
-    data = np.log(np.loadtxt(open(fname,'r'), delimiter=' '))
+    data = np.log10(np.loadtxt(open(fname,'r'), delimiter=' '))
+    close(filename)
     plt.imshow(data, cmap='jet', interpolation='nearest')
     plt.colorbar()
     plt.show()

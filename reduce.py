@@ -13,6 +13,7 @@ import glob
 import random
 import math
 import matplotlib.pyplot as plt
+import numpy as np
 from collections import defaultdict
 
 from nfa import Nfa
@@ -278,11 +279,11 @@ def main():
         gen = aut.write()
         write_output(args.output, gen)
     elif args.command == 'dot':
-        freq = None
+        _freq = None
         if args.freq:
-            freq = get_freq(args.freq)
+            _freq = get_freq(args.freq)
         aut = Nfa.parse(args.input)
-        gen = aut.write_dot(args.trans, freq)
+        gen = aut.write_dot(show_trans=args.trans, freq=_freq)
         fname = args.output if args.output else 'dot'
         write_output(fname, gen)
         if args.show:
@@ -297,7 +298,7 @@ def main():
             state_cnt = len(dc)
             plt.xlabel('number of packets')
             plt.ylabel('number of states')
-            print('packets frequency top ', args.topn)
+            print('packets frequency top ', args.topn, ':')
             print('packets\t\tstates\t\tpct%')
         else:
             aut = Nfa.parse(args.input)
@@ -306,12 +307,12 @@ def main():
                 dc = aut.state_depth
                 plt.xlabel('depth')
                 plt.ylabel('states')
-                print('depth count top ', args.topn)
+                print('depth count top ', args.topn, ':')
                 print('depth\t\tstates\t\tpct%')
             elif args.rules:
-                rules = aut.divide_to_rules()
+                rules = aut.split_to_rules()
                 total = 0
-                for rule in rules:
+                for rule in rules.values():
                     print(rule)
                     total += len(rule)
                 print('total: {} rules:{}'.format(aut.state_count,total))
@@ -320,7 +321,7 @@ def main():
                 dc = aut.neigh_count()
                 plt.xlabel('number of neighbors')
                 plt.ylabel('number of states')
-                print('neighbors count top ', args.topn)
+                print('neighbors count top ', args.topn, ':')
                 print('neighbors\tstates\t\tpct%')
 
         # textual stats about distribution
@@ -353,9 +354,33 @@ def main():
         plt.show()
     elif args.command == 'reduce':
         aut = Nfa.parse(args.input)
+        with open(args.freq, 'r') as f:
+            mx = np.loadtxt(f, delimiter=' ')
+        mx = mx / mx.max()
+        #print(aut.eval_states(mx))
+        #return
+        '''
+        reduction = CorrReduction(aut, 0.3)
+        reduction.evaluate_states(args.freq)
+        reduction.reduce(verbose=True)
+        gen = aut.write()
+        write_output(args.output, gen)
+        '''
+        
+        #val = {key : v * 100000 for key,v in val.items()}
+        val = aut.eval_states(mx)
+        #write_output(args.output, aut.write_dot(freq=val))
+        write_output('aut.dot', aut.write_dot(freq=val))
+        subprocess.call('dot -Tjpg aut.dot -o aut.jpg'.split())
+        subprocess.call('xdg-open aut.jpg'.split())
+        
+
+        #reduction = CorrReduction(aut, 0.3)
+        #reduction.evaluate_states()
+        return
         reduction = PruneReduction(aut, 0.3)
-        reduction.evaluate_states(filename=args.freq)
-        reduction.reduce()
+        reduction.evaluate_states(args.freq)
+        reduction.reduce(verbose=True)
         gen = aut.write()
         write_output(args.output, gen)
     else:

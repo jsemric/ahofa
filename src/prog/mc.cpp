@@ -10,7 +10,7 @@ using namespace reduction;
 
 #define N 256
 array<array<int,N>,N> mc;
-array<array<double,N>,N> mcd;
+array<size_t,N> sym_dist;
 
 int get_max(int next) {
     assert(next < N);
@@ -31,12 +31,14 @@ void print_r(int c) {
 }
 
 int main(int argc, char **argv) {
-    if (argc < 3) {
+    if (argc < 2) {
+        cerr << "1 argument required: pcap file\n";
         return 1;
     }
-    int cnt = 0;
-    FastNfa nfa;
-    nfa.read_from_file(argv[2]);
+    //int cnt = 0;
+/*    FastNfa nfa;
+    nfa.read_from_file(argv[2]);*/
+    /*
     pcapreader::process_payload(
         argv[1], [&](const unsigned char*payload, unsigned len)
         {
@@ -46,13 +48,25 @@ int main(int argc, char **argv) {
             }
         });
 
-/*
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N-1; j++)
             cout << mc[i][j] << " ";
         cout << mc[i][N-1] << endl;
-    }
+    }*/
+    pcapreader::process_payload(
+        argv[1], [&](const unsigned char*payload, unsigned len)
+        {
+            for (unsigned i = 0; i + 1 < len; i++) {
+                sym_dist[payload[i] % N]++;
+            }
+        });
 
+    for (int i = 0; i < N - 1; i++) {
+        cout << sym_dist[i] << " ";
+    }
+    cout << sym_dist[N-1] << endl;
+
+/*
     for (int i = 32; i < N; i++) {
         int next = i;
         int cnt = 5;
@@ -64,7 +78,7 @@ int main(int argc, char **argv) {
         cout << "\n";
     }
 */
-
+/*
     for (int i = 0; i < N; i++) {
         int max = 0;
         for (int j = 0; j < N-1; j++) {
@@ -102,6 +116,7 @@ int main(int argc, char **argv) {
             data[i] += bm[i];
         }
     }
+    */
     /*
     for (size_t i = 0; i < data.size(); i++)
         cout << data[i] << endl;

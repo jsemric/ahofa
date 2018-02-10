@@ -178,52 +178,6 @@ void reduce(const vector<string> &args)
         auto labels = read_state_labels(nfa, args[0]);
         prune(nfa, labels, reduce_ratio, eps);
     }
-    else if (reduction_type == "armc") {
-        // each state marked with prefix
-        vector<set<size_t>> state_labeling(nfa.state_count());
-        // we distinguish the prefixes by some integral value
-        size_t prefix = 0;
-        pcapreader::process_payload(
-            args[0].c_str(),
-            [&] (const unsigned char *payload, unsigned len)
-            {
-                nfa.parse_word(payload, len,
-                    [&state_labeling, &prefix](State s)
-                    {
-                        state_labeling[s].insert(prefix);
-                    },
-                    [&prefix]() {prefix++;});
-            }, filter_expr);
-        auto res = armc(nfa, state_labeling);
-        for (auto i : res) {
-            for (auto j : i) {
-                cout << state_map[j] << " ";
-            }
-            cout << endl;
-        }
-    }
-    else if (reduction_type == "a") {
-        Data data(nfa.state_count());
-        // generate random strings
-        srand(time(0));
-        for (size_t i = 0; i < 10000; i++) {
-            unsigned char word[1000];
-            for (size_t j = 0; j < 1000; j++) {
-                word[j] = rand() % 256;
-            }
-            label_states(data, word, 1000);
-        }
-
-        map<State, size_t> labels;
-        for (size_t i = 0; i < data.nfa1_data.size(); i++) {
-            labels[state_map[i]] = data.nfa1_data[i];
-        }
-
-        prune(nfa, labels, reduce_ratio, eps);
-    }
-    else if (reduction_type == "ga") {
-        // TODO or not
-    }
 }
 
 void compute_error(Data &data, const unsigned char *payload, unsigned plen)

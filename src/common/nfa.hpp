@@ -1,5 +1,5 @@
 /// @author Jakub Semric
-/// 2017
+/// 2018
 
 #pragma once
 
@@ -112,6 +112,7 @@ public:
     void parse_word(
         const Word word, unsigned length, FuncType1 visited_state_handler,
         FuncType2 loop_handler = default_lambda) const;
+    virtual bool accept(const Word word, unsigned length) const override;
 };
 
 
@@ -143,6 +144,31 @@ void FastNfa::parse_word(
         loop_handler();
         actual = std::move(next);
     }   
+}
+
+inline bool FastNfa::accept(const Word word, unsigned length) const
+{
+    std::set<State> actual{state_map.at(initial_state)};
+
+    for (unsigned i = 0; i < length && !actual.empty(); i++) {
+        std::set<State> next;
+        for (auto j : actual) {
+            assert ((j << shift) + word[j] < trans_vector.size());
+            auto trans = trans_vector[(j << shift) + word[i]];
+            if (!trans.empty()) {
+                for (auto k : trans) {
+                    // do something with visited state, use this information
+                    if (final_states.find(k) != final_states.end()) {
+                        return true;
+                    }
+                    next.insert(k);
+                }
+            }
+        }
+        actual = std::move(next);
+    }   
+
+    return false;
 }
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

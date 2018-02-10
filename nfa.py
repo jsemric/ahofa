@@ -195,17 +195,15 @@ class Nfa:
         del self._transitions[final_state]
 
 
-        
-
-    def divide_to_rules(self):
+    def split_to_rules(self):
         succ = self.succ
         pred = self.pred
-        rules_all = []
+        rules_all = {}
         gen = self.generator
 
         if type(gen) != type(2):
             raise NfaError(
-                'version with multiple or none self-loop states has not been '
+                'version with multiple or no self-loop states has not been '
                 'implemented')
 
         for state in succ[gen] - set([gen]):
@@ -214,7 +212,7 @@ class Nfa:
             not_first = False
             for s in pred[state]:
                 if not self._has_path_over_alph(s,s) and \
-                    not s == self._initial_state:
+                    not s == self._initial_state and s != state:
                     not_first = True
                     break
             if not_first:
@@ -231,7 +229,7 @@ class Nfa:
                 actual = successors - rule
                 rule |= successors
 
-            rules_all.append(rule)
+            rules_all[state] = rule
 
         return rules_all
 
@@ -362,6 +360,70 @@ class Nfa:
             [mapping[x] if x in mapping else x
             for x in self._final_states.copy()])
 
+
+    def eval_states(self, mx):
+        succ = self.succ
+        trans = self._transitions
+        val = {s:1 for s in self.states}
+        freq_in = defaultdict(lambda : defaultdict(float))
+
+        for state, rules in self._transitions.items():
+            for sym, value in rules.items():
+                for q in value:
+                    if q != state:
+                        freq_in[q][state] += mx[sym]
+
+        actual = set([self._initial_state])
+        visited = set([self._initial_state])
+        while actual:
+            new_actual = set()
+            for p in actual:
+                for q in succ[p]:
+                    if not q in visited:
+                        val[q] = 0
+                        tmp = 0
+                        for s, v in freq_in[q].items():
+                            if s in visited:
+                                tmp += v * val[s]
+                        val[q] = min(1,tmp)
+                        new_actual.add(q)
+                        visited.add(q)
+
+            actual = new_actual
+        return val
+
+        '''
+        rules = self.split_to_rules()
+        #for i,j in rules.items():
+        #    print(i,':',' '.join(str(x) for x in j))
+
+        for first, states in rules.items():
+            val[first] = 1
+            actual = set([first])
+            visited = set([first])
+            while actual:
+                # standard breadth first search beginning from the first state
+                # of a rule
+                new_actual = set()
+                for p in actual:
+                    for q in succ[p]:
+                        if not q in visited:
+                            val[q] = 0
+                            new_actual.add(q)
+                            visited.add(q)
+                            tmp = 0
+                            for state, symbols in flow_in[q].items():
+                                if state in visited:
+                                    for sym1 in symbols:
+                                        for sym2 in sym_in[state]:
+                                            tmp += mx[sym2][sym1]
+
+                                val[q] += val[state] * tmp
+                            val[q] = min(1,val[q])
+                actual = new_actual
+        '''
+        return val
+
     ###########################################################################
     # IO METHODS
     ###########################################################################
@@ -447,19 +509,20 @@ class Nfa:
         for line in self.write(how=how):
             print(line, end='', file=f)
 
-    def write_dot(self, show_trans=False, freq=None,*,states=None):
+    def write_dot(self, *, show_trans=False, freq=None, states=None):
         if states == None:
-            states = self.states
+            states = list(self.states)
         yield 'digraph NFA {\n \
         rankdir=LR;size="8,5"\n \
         graph [ dpi = 1000 ]\n'
 
-        # display frequencies as heat map
+        # display frequencies as a heat map
         if freq:
             freq[self._initial_state] = max(freq.values())
-            heatmap = {state:int(math.log2(f + 2)) for state, f in freq.items()}
+            heatmap = {state:int(math.log2(f + 2)+20) for state, f in freq.items()}
+            heatmap = freq
             _max = max(heatmap.values())
-            _min = min( heatmap.values())
+            _min = min(heatmap.values())
             heatmap[self._initial_state] = _max
             for state in states:
                 if state in self._final_states:
