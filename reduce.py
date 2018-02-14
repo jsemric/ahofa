@@ -18,6 +18,7 @@ from collections import defaultdict
 
 from nfa import Nfa
 from reduction import PruneReduction
+from reduction import BigramReduction
 
 def search_for_file(fname):
     for root, dirs, files in os.walk('.'):
@@ -283,8 +284,12 @@ def main():
         if args.freq:
             _freq = get_freq(args.freq)
         aut = Nfa.parse(args.input)
-        gen = aut.write_dot(show_trans=args.trans, freq=_freq)
-        fname = args.output if args.output else 'dot'
+        gen = aut.write_dot(
+            show_trans=args.trans, freq=_freq,
+            #states=set(s for s,f in _freq.items() if f > 10),
+            #rules=10,
+            freq_scale=lambda x: math.log(x + 2), show_diff=_freq != None)
+        fname = args.output if args.output else 'nfa.dot'
         write_output(fname, gen)
         if args.show:
             image = fname.split('.dot')[0] + '.jpg'
@@ -354,30 +359,24 @@ def main():
         plt.show()
     elif args.command == 'reduce':
         aut = Nfa.parse(args.input)
-        with open(args.freq, 'r') as f:
-            mx = np.loadtxt(f, delimiter=' ')
-        mx = mx / mx.max()
-        #print(aut.eval_states(mx))
-        #return
-        '''
-        reduction = CorrReduction(aut, 0.3)
+        #'''
+        reduction = GradientReduction(aut, 0.3)
         reduction.evaluate_states(args.freq)
         reduction.reduce(verbose=True)
         gen = aut.write()
         write_output(args.output, gen)
-        '''
         
-        #val = {key : v * 100000 for key,v in val.items()}
+        return
+        # '''
+        with open(args.freq, 'r') as f:
+            mx = np.loadtxt(f, delimiter=' ')
+        mx = mx / mx.sum()
         val = aut.eval_states(mx)
-        #write_output(args.output, aut.write_dot(freq=val))
         write_output('aut.dot', aut.write_dot(freq=val))
         subprocess.call('dot -Tjpg aut.dot -o aut.jpg'.split())
         subprocess.call('xdg-open aut.jpg'.split())
-        
-
-        #reduction = CorrReduction(aut, 0.3)
-        #reduction.evaluate_states()
         return
+
         reduction = PruneReduction(aut, 0.3)
         reduction.evaluate_states(args.freq)
         reduction.reduce(verbose=True)

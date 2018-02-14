@@ -74,15 +74,72 @@ class PruneReduction():
 
         self._nfa.merge_states(merge_mapping,clear_finals=False)
         # adjust member variables
+
 '''
-obsolete
-class CorrReduction(PruneReduction):
+class GradientReduction(PruneReduction):
     def __init__(self, automaton, ratio, *, error=False):
-        super().__init__(automaton, ratio, error=True)
+        super().__init__(automaton, ratio, error=error)
+
+    def reduce(self, *, verbose=False):
+        succ = self._nfa.succ
+        freq = self._mapping
+        for s in self._nfa.states:
+'''
+
+class BigramReduction(PruneReduction):
+    def __init__(self, automaton, ratio, *, error=False):
+        super().__init__(automaton, ratio, error=error)
 
     def evaluate_states(self, filename):
         with open(filename, 'r') as f:
             mx = np.loadtxt(f, delimiter=' ')
-        mx = np.log(mx / mx.max())
+        mx = mx / mx.sum()
         self._mapping = self._nfa.eval_states(mx)
-'''
+
+    def reduce(self, *, verbose=False):
+        depth = self._nfa.state_depth
+        finals = self._nfa._final_states
+        mapping = self._mapping
+        gen = self._nfa.generator
+        pred = self._nfa.pred
+        rules = []
+        rule_sums = []
+
+        for i in self._nfa.split_to_rules().values():
+            srt_rule = sorted(i, key=lambda x: (depth[x], len(pred[x] & i)))
+            fin = next(x for x in i if x in finals)
+            srt_rule.pop(srt_rule.index(fin))
+            vals = [ mapping[x] for x in srt_rule ]
+            rules.append((fin, srt_rule))
+            rule_sums.append(sum(vals))
+
+        merge_mapping = dict()
+        max_to_remove = len(rules) * 3 + 2
+        to_remove = max(max_to_remove,self._nfa.state_count * (1-self._ratio))
+        
+        while to_remove > 0:
+            _max = max(rule_sums)
+            index = rule_sums.index(_max)
+            rule = rules[index]
+            print(_max, rule[0])
+            #print(rule)
+            #len(rule_to_shrink) / 2
+            first = rule[1][0]
+            last = rule[1][-1]
+            if mapping[first] > mapping[last]:
+                rule_sums[index] -= mapping[first]
+                merge_mapping[first] = gen
+                rule[1].pop(0)
+            else:
+                rule_sums[index] -= mapping[last]
+                merge_mapping[last] = rule[0]
+                rule[1].pop()
+
+            to_remove -= 1
+        print('=====')
+        for i in rule_sums:
+            print(i)
+
+
+        self._nfa.merge_states(merge_mapping,clear_finals=False)
+

@@ -270,8 +270,12 @@ class Nfa:
                self._has_path_over_alph(s, s):
                 to_remove.add(s)
 
-        if to_remove:
+        if len(to_remove) > 1:
+            #print(len(to_remove))
+            #print(to_remove)
             state = to_remove.pop()
+            self.merge_states({x:state for x in to_remove})
+        '''
         # remove states & add transitions
         for s in to_remove:
             for p in pred[s]:
@@ -281,12 +285,50 @@ class Nfa:
             for key, val in self._transitions[s].items():
                 for x in val:
                     self._add_rule(state, x, key)
+        '''
+        # remove another self-loop state generators
+        sl_stats = defaultdict(set)
+        for s in succ[state]:
+            print(s)
+            if s == state:
+                continue
+            # check for self-loop
+            if s in succ[s]:
+                symbols = ''
+                for sym, states in self._transitions[s].items():
+                    if s in states:
+                        symbols += chr(sym)
+                sl_stats[symbols].add(s)
 
+        print(sl_stats)
+        mapping = dict()
+        for states in sl_stats.values():
+            _s = states.pop()
+            for s in states:
+                mapping[s] = _s
+
+        finals = self._final_states
         # merge all final states to one
         if collapse_finals:
-            self.collapse_final_states()
+            #self.collapse_final_states()
+            _f = finals.pop()
+            for f in finals:
+                mapping[f] = _f
+        else:
+            #self.remove_unreachable()
+            # merge finals states in 1 rule to one final state
+            rules = self.split_to_rules()
+            for i in rules.values():
+                first = None
+                for s in i:
+                    if s in finals:
+                        if first == None:
+                            first = s
+                        else:
+                            mapping[s] = first
 
-        return self.remove_unreachable()
+        if len(mapping):
+            self.merge_states(mapping, merge_finals=True)
 
     def collapse_final_states(self):
         self.merge_states()
@@ -327,7 +369,7 @@ class Nfa:
                 else:
                     finals.add(src)
 
-            if not clear_finals and not src in finals:
+            if not (clear_finals and src in finals):
                 for symbol, states in trans[merged].items():
                     trans[src][symbol] |= states
             del trans[merged]
@@ -362,66 +404,24 @@ class Nfa:
 
 
     def eval_states(self, mx):
-        succ = self.succ
-        trans = self._transitions
-        val = {s:1 for s in self.states}
-        freq_in = defaultdict(lambda : defaultdict(float))
+        sym_in = defaultdict(set)
+        sym_out = defaultdict(set)
+        val = dict()
 
         for state, rules in self._transitions.items():
             for sym, value in rules.items():
+                sym_out[state].add(sym)
                 for q in value:
-                    if q != state:
-                        freq_in[q][state] += mx[sym]
+                    sym_in[q].add(sym)
 
-        actual = set([self._initial_state])
-        visited = set([self._initial_state])
-        while actual:
-            new_actual = set()
-            for p in actual:
-                for q in succ[p]:
-                    if not q in visited:
-                        val[q] = 0
-                        tmp = 0
-                        for s, v in freq_in[q].items():
-                            if s in visited:
-                                tmp += v * val[s]
-                        val[q] = min(1,tmp)
-                        new_actual.add(q)
-                        visited.add(q)
+        for s in self.states:
+            v = 0
+            for i in sym_in[s]:
+                for j in sym_out[s]:
+                    v += mx[i][j]
+            #val[s] = math.log2(v+0.0000000001)
+            val[s] = v
 
-            actual = new_actual
-        return val
-
-        '''
-        rules = self.split_to_rules()
-        #for i,j in rules.items():
-        #    print(i,':',' '.join(str(x) for x in j))
-
-        for first, states in rules.items():
-            val[first] = 1
-            actual = set([first])
-            visited = set([first])
-            while actual:
-                # standard breadth first search beginning from the first state
-                # of a rule
-                new_actual = set()
-                for p in actual:
-                    for q in succ[p]:
-                        if not q in visited:
-                            val[q] = 0
-                            new_actual.add(q)
-                            visited.add(q)
-                            tmp = 0
-                            for state, symbols in flow_in[q].items():
-                                if state in visited:
-                                    for sym1 in symbols:
-                                        for sym2 in sym_in[state]:
-                                            tmp += mx[sym2][sym1]
-
-                                val[q] += val[state] * tmp
-                            val[q] = min(1,val[q])
-                actual = new_actual
-        '''
         return val
 
     ###########################################################################
@@ -509,9 +509,25 @@ class Nfa:
         for line in self.write(how=how):
             print(line, end='', file=f)
 
-    def write_dot(self, *, show_trans=False, freq=None, states=None):
+    def write_dot(
+        self, *, show_trans=False, freq=None, states=None, show_diff=False,
+        freq_scale=None, rules=None):
+
+        succ = self.succ
+
         if states == None:
             states = list(self.states)
+
+        if rules != None:
+            r = self.split_to_rules()
+            states = set([self._initial_state, self.generator])
+            cnt = 0
+            for s in r.values():
+                states |= s
+                cnt += 1
+                if cnt >= rules: 
+                    break
+
         yield 'digraph NFA {\n \
         rankdir=LR;size="8,5"\n \
         graph [ dpi = 1000 ]\n'
@@ -519,8 +535,11 @@ class Nfa:
         # display frequencies as a heat map
         if freq:
             freq[self._initial_state] = max(freq.values())
-            heatmap = {state:int(math.log2(f + 2)+20) for state, f in freq.items()}
-            heatmap = freq
+            if freq_scale:
+                heatmap = {
+                    state:int(freq_scale(f)) for state, f in freq.items()}
+            else:
+                heatmap = freq
             _max = max(heatmap.values())
             _min = min(heatmap.values())
             heatmap[self._initial_state] = _max
@@ -531,19 +550,22 @@ class Nfa:
                     shape = 'circle'
                 r,g,b = rgb(_max, _min, heatmap[state])
                 color = "#%0.2X%0.2X%0.2X" % (r, g, b)
-                yield 'node [shape={},style=filled,fillcolor="{}",label="{}"];q{}\n'.format(shape, color, freq[state],state)
+                yield 'node [shape={},style=filled,fillcolor="{}",label="{}"];'\
+                    'q{}\n'.format(shape, color, freq[state],state)
         else:
             yield '{node [shape = doublecircle, style=filled, fillcolor=red];'
             yield ';'.join(['q' + str(qf) for qf in self._final_states]) + '\n'
             yield '}\n'
 
+        # initial state
         yield 'node [shape = point]; qi\nnode [shape = circle];\n'
         yield 'qi -> q' + str(self._initial_state) + ';\n'
 
-        succ = self.succ
         # display transitions
         for state in states:
             for s in succ[state]:
+                if not s in states:
+                    continue
                 yield ' '.join(('q' + str(state), '->', 'q' + str(s)))
                 # display labels
                 if show_trans:
@@ -552,6 +574,12 @@ class Nfa:
                         if s in _states:
                             labels.append(symbol)
                     yield ' [ label="' + sanitize_labels(labels) + '"]'
+                elif show_diff:
+                    if freq == None:
+                        raise RuntimeError('freq argument must be specified')
+                    if freq[state] > 0:
+                        diff = round(100*freq[s]/freq[state], 2)
+                        yield ' [ label="' + str(diff) + '%"]'
                 yield ";\n"
 
         yield '}\n'
