@@ -13,7 +13,7 @@ CXXFLAGS=$(STD) -Wall -Wextra -pedantic -I $(COMMON) -O3 #-DNDEBUG
 LIBS=-lpcap -lpthread -lboost_system -lboost_filesystem
 PROG=nfa_handler
 
-all: nfa_handler matrix state_merge_mc
+all: nfa_handler matrix state_merge_mc lmin
 
 SRC=$(wildcard $(COMMON)/*.cpp)
 HDR=$(wildcard $(COMMON)/*.hpp)
@@ -25,6 +25,12 @@ nfa_handler: $(PDIR)/nfa_handler.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
 $(PDIR)/nfa_handler.o: $(PDIR)/nfa_handler.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
+
+lmin: $(PDIR)/lmin.o $(OBJ)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
+
+$(PDIR)/lmin.o: $(PDIR)/lmin.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
 matrix: $(PDIR)/mc.o $(OBJ)
