@@ -189,33 +189,7 @@ void Nfa::merge_states(const map<State,State> &mapping)
 
     clear_final_state_selfloop();
 }
-/*
-map<State,set<State>> Nfa::split() const {
-    map<State,set<State>> ret;
-    // states which cannot be merged
-    auto pr = pred();
-    for (auto f : final_states) {
-        ret[f].insert(f);
-        set<State> actual = pr[f];
-        set<State> visited{f};
-        while (!actual.empty()) {
-            set<State> next;
-            set_union(visited, actual);
-            for (auto i : actual) {
-                ret[i].insert(f);
-                for (auto j : pr[i]) {
-                    if (visited.find(j) == visited.end()) {
-                        next.insert(j);
-                    }
-                }
-            }
-            actual = move(next);
-        }
-    }
 
-    return ret;
-}
-*/
 map<State,State> Nfa::split_to_rules() const
 {
     set<State> visited{initial_state};
@@ -374,97 +348,6 @@ map<State,unsigned> Nfa::state_depth() const
     }
 
     return ret;
-}
-
-void Nfa::reduce(map<State,size_t> state_freq)
-{
-    auto suc = succ();
-    auto depth = state_depth();
-    map<State,State> mapping;
-    auto rules = split_to_rules();
-    int cnt=0;
-    int cnt2=0;
-    set<State> to_merge;
-
-    set<State> actual{initial_state};
-    set<State> visited{initial_state};
-
-    while (!actual.empty())
-    {
-        set<State> next;
-        for (auto state : actual)
-        {
-            auto freq = state_freq[state];
-            for (auto next_state : suc[state])
-            {
-                if (visited.find(next_state) == visited.end())
-                {
-                    if (state_freq[next_state] > 0)
-                    {
-                        if (false && depth[state] > 2 &&
-                            1.0 * state_freq[next_state] / freq > 0.999)
-                        {
-                            cnt2++;
-                            if (mapping.find(state) != mapping.end())
-                            {
-                                mapping[next_state] = mapping[state];
-                            }
-                            else
-                            {
-                                mapping[next_state] = state;   
-                            }
-                        }
-                        
-                    }
-                    else
-                    {
-                        cnt++;
-                        mapping[next_state] = rules[next_state];
-                    }
-                    next.insert(next_state);
-                    visited.insert(next_state);
-                }
-            }
-        }
-        //set_union(visited, actual);
-        actual = move(next);
-    }
-
-/*
-    for (auto i : state_freq) {
-        auto state = i.first;
-        auto freq = i.second;
-        if (is_final(state)) continue;
-        if (freq == 0) {
-            cnt++;
-            mapping[state] = rules[state];
-            to_merge.insert(rules[state]);
-        }
-        else if (1 && depth[state] > 2) {
-            for (auto j : suc[state]) {
-                if (1.0 * state_freq[j] / freq > 0.999) {
-                    cnt2++;
-                    if (mapping.find(state) != mapping.end()) {
-                        mapping[j] = mapping[state];
-                    }
-                    else {
-                        mapping[j] =  state;   
-                    }
-                    to_merge.insert(state);
-                }
-            }
-        }
-    }
-*/
-    for (auto i : to_merge) {
-        if (mapping.find(i) != mapping.end()) {
-            cerr << i << "\n";
-            throw runtime_error("FATAL!");
-        }
-
-    }
-    merge_states(mapping);
-    cerr << cnt2 << " " << cnt + cnt2 << endl;
 }
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

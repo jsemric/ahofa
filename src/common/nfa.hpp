@@ -45,11 +45,12 @@ public:
     Nfa(const Nfa &nfa);
     ~Nfa() {}
 
+    // IO
     virtual void read_from_file(ifstream &input);
     void read_from_file(const char *input);
-
-    void collapse_final_states();
+    void print(ostream &out = cout) const;
     
+    // setters, getters
     set<State> get_final_states() const { return final_states;}
     State get_initial_state() const { return initial_state;}
     set<State> get_states() const;
@@ -65,16 +66,19 @@ public:
         return final_states.find(state) != final_states.end();
     }
 
+    // helpful functions
     bool has_selfloop_over_alph(State s) const;
     map<State,State> split_to_rules() const;
     map<State,set<State>> pred() const;
     map<State,set<State>> succ() const;
-    void merge_states(const map<State,State> &mapping);
-    void print(ostream &out = cout) const;
-    void clear_final_state_selfloop();
     map<State,unsigned> state_depth() const;
+    void clear_final_state_selfloop();
+    void collapse_final_states();
+    
+    // essential
+    void merge_states(const map<State,State> &mapping);
+
     virtual bool accept(const Word word, unsigned length) const;
-    void reduce(map<State,size_t> state_freq);
 };
 
 

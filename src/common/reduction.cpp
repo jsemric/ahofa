@@ -41,58 +41,67 @@ void prune(
         total = total < i.second ? i.second : total;
     }
 
-    // sort states in ascending order according to state packet frequencies
-    // and state depth
-    sort(
-        sorted_states.begin(), sorted_states.end(),
-        [&state_freq, &depth](State x, State y)
-        {
-            auto _x = state_freq.at(x);
-            auto _y = state_freq.at(y);
-            if (_x == _y)
+    try {
+        // sort states in ascending order according to state packet frequencies
+        // and state depth
+        sort(
+            sorted_states.begin(), sorted_states.end(),
+            [&state_freq, &depth](State x, State y)
             {
-                return depth.at(x) > depth.at(y);
-            }
-            else
+                auto _x = state_freq.at(x);
+                auto _y = state_freq.at(y);
+                if (_x == _y)
+                {
+                    return depth.at(x) > depth.at(y);
+                }   
+                else
+                {
+                    return _x < _y;
+                }
+            });
+
+        float error = 0;
+        size_t state_count = nfa.state_count();
+        size_t removed = 0;
+        
+        if (eps != -1)
+        {
+            // use error rate
+            while (error < eps && removed < sorted_states.size())
             {
-                return _x < _y;
+                State state = sorted_states[removed];
+                merge_map[state] = rule_map[state];
+                removed++;
+                error += (1.0 * state_freq.at(state)) / total;
             }
-        });
-
-    float error = 0;
-    size_t state_count = nfa.state_count();
-    size_t removed = 0;
-    
-    if (eps != -1)
-    {
-        // use error rate
-        while (error < eps && removed < sorted_states.size())
-        {
-            State state = sorted_states[removed];
-            merge_map[state] = rule_map[state];
-            removed++;
-            error += (1.0 * state_freq.at(state)) / total;
         }
-    }
-    else 
-    {
-        // use pct rate
-        size_t to_remove = (1 - pct) * state_count;
-        while (removed < to_remove && removed < sorted_states.size())
+        else 
         {
-            State state = sorted_states[removed];
-            merge_map[state] = rule_map[state];
-            removed++;
-            error += (1.0 * state_freq.at(state)) / total;
+            // use pct rate
+            size_t to_remove = (1 - pct) * state_count;
+            while (removed < to_remove && removed < sorted_states.size())
+            {
+                State state = sorted_states[removed];
+                merge_map[state] = rule_map[state];
+                removed++;
+                error += (1.0 * state_freq.at(state)) / total;
+            }
         }
-    }
 
-    nfa.merge_states(merge_map);
-    size_t new_sc = state_count - removed;
-    size_t reduced_to = new_sc * 100 / state_count;
-    cerr << "Reduction: " << new_sc << "/" << state_count
-        << " " << reduced_to << "%\n";
-    cerr << "Predicted error: " << error << endl;
+        nfa.merge_states(merge_map);
+        size_t new_sc = state_count - removed;
+        size_t reduced_to = new_sc * 100 / state_count;
+        cerr << "Reduction: " << new_sc << "/" << state_count
+            << " " << reduced_to << "%\n";
+        cerr << "Predicted error: " << error << endl;
+    }
+    catch (out_of_range &e)
+    {
+        string errmsg =
+            "invalid index in state frequencies in 'prune' function ";
+        errmsg += e.what();
+        throw out_of_range(errmsg);
+    }
 }
 
 void merge_and_prune(
@@ -135,10 +144,6 @@ void merge_and_prune(
                         }
                         
                     }
-                    else
-                    {
-                        //mapping[next_state] = rules[next_state];
-                    }
                     next.insert(next_state);
                     visited.insert(next_state);
                 }
@@ -147,14 +152,17 @@ void merge_and_prune(
         actual = move(next);
     }
 
+    // just for verification
     for (auto i : to_merge) {
         if (mapping.find(i) != mapping.end()) {
-            cerr << i << "\n";
-            throw runtime_error("FATAL!");
+            throw runtime_error("FAILURE");
         }
     }
 
-    pct -= cnt_merged * 1.0 / nfa.state_count();
+    // change the reduction ratio in order to adjust pruning
+    double scnt = nfa.state_count();
+    pct -= scnt * pct / (scnt - cnt_merged);
+
     // prune the rest
     nfa.merge_states(mapping);
     auto freq = state_freq;

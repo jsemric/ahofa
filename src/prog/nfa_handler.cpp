@@ -1,8 +1,6 @@
 /// @author Jakub Semric
 /// 2018
 
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
 #include <iostream>
 #include <ostream>
 #include <sstream>
@@ -32,7 +30,8 @@ namespace fs = boost::filesystem;
 
 class StopWork : public exception {};
 
-struct Data {
+struct Data
+{
     // long data
     vector<size_t> nfa1_data;
     vector<size_t> nfa2_data;
@@ -66,19 +65,20 @@ struct Data {
 };
 
 const char *helpstr =
-"Program provides several operations with automata. The error computing,\n"
-"state labeling and reduction.\n"
+"Program provides several operations with automata. Error computing,\n"
+"state labeling and reduction. The error computing is set by default, \n"
+"positional arguments are TARGET REDUCED PCAPS ..., where TARGET is an input\n"
+"NFA, REDUCED denotes over-approximated reduction of the of TARGET and\n"
+"PCAPS are packet capture files.\n"
 "Usage: ./nfa_handler [OPTIONS] FILE1 FILE2 ...\n"
 "options:\n"
 "  -h            : show this help and exit\n"
 "  -o <FILE>     : specify output file or directory for -s option\n"
 "  -n <NWORKERS> : number of workers to run in parallel\n"
-"  -j            : verbose output in JSON\n"
 "  -f <FILTER>   : define BPF filter, for syntax see man page\n"
-"  -x            : error computing, set by default, positional arguments are\n"
-"                  TARGET REDUCED PCAPS ..., where TARGET is input NFA, \n"
-"                  REDUCED denotes over-approximated reduction of TARGET and\n"
-"                  PCAPS are packet capture files\n"
+"  -j            : verbose output in JSON\n"
+"  -c            : Rigorous error computation. Consistent but much slower.\n"
+"                  Use only if not sure about over-approximation\n"
 "  -s            : store results to a separate file per each packet capture\n"
 "                  file\n"
 "  -l            : label NFA states with traffic, positional arguments are \n"
@@ -97,6 +97,7 @@ bool label_opt = false;
 bool reduce_opt = false;
 bool store_sep = false;
 bool to_json = false;
+bool consistent = false;
 string outdir = "data/prune-error";
 
 // reduction additional options
@@ -139,6 +140,7 @@ void sum_up(const Data &data)
 
 void sighandl(int signal)
 {
+    (void)signal;
     cout << "\n";
     // stop all work
     continue_work = false;
@@ -205,7 +207,7 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
         }
     }
 
-    if (match1)
+    if (match1 || consistent)
     {
         data.accepted_reduced++;
         int match2 = 0;
@@ -215,7 +217,8 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
         for (size_t i = 0; i < final_state_idx2.size(); i++)
         {
             size_t idx = final_state_idx2[i];
-            if (bm[idx]) {
+            if (bm[idx])
+            {
                 match2++;
                 data.nfa2_data[idx]++;
             }
@@ -224,6 +227,11 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
         if (match1 != match2)
         {
             data.wrongly_classified++;
+            if (consistent && match2 > match1)
+            {
+                cerr << "Reduced automaton ain't over-approximation!\n";
+                exit(1);
+            }
         }
         else
         {
@@ -469,13 +477,13 @@ int main(int argc, char **argv)
     int opt_cnt = 1;    // program name
     int c;
 
-    /*try*/ {
+    try {
         if (argc < 2) {
             cerr << helpstr;
             return 1;
         }
 
-        while ((c = getopt(argc, argv, "ho:n:axf:xrle:p:t:s")) != -1) {
+        while ((c = getopt(argc, argv, "ho:n:f:rle:p:t:sjc")) != -1) {
             opt_cnt++;
             switch (c) {
                 // general options
@@ -502,6 +510,9 @@ int main(int argc, char **argv)
                     break;
                 case 'j':
                     to_json = true;
+                    break;
+                case 'c':
+                    consistent = true;
                     break;
                 // reduction additional options
                 case 'e':
@@ -633,11 +644,11 @@ int main(int argc, char **argv)
             static_cast<ofstream*>(output)->close();
             delete output;
         }
-    }/*
+    }
     catch (exception &e) {
         cerr << "\033[1;31mERROR\033[0m " << e.what() << endl;
         return 1;
-    }*/
+    }
 
     return 0;
 }
