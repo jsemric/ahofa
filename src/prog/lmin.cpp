@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
         // find equivalent states and merge them
         for (size_t i = 0; i < state_labels.size(); i++) {
 
-            if (state_labels[i].empty()) {
+            if (state_labels[i].empty() || nfa.is_final(state_map[i])) {
                 continue;
             }
 
@@ -100,18 +100,11 @@ int main(int argc, char **argv) {
             cerr << "Removed: " << cnt << endl;
         }
 
-
-        // TODO split to rules and merge final states
+        nfa.merge_states(mapping);
 
         if (merge_finals) {
-            ;
+            nfa.collapse_final_states();
         }
-        else {
-            ;
-        }
-
-
-        nfa.merge_states(mapping);
 
         ofstream out{argv[opt_cnt + 1]};
         nfa.print(out);

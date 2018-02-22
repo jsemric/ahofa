@@ -17,8 +17,6 @@ import numpy as np
 from collections import defaultdict
 
 from nfa import Nfa
-from reduction import PruneReduction
-from reduction import BigramReduction
 
 def search_for_file(fname):
     for root, dirs, files in os.walk('.'):
@@ -159,16 +157,9 @@ def main():
     nfa_input_parser = argparse.ArgumentParser(add_help=False)
     nfa_input_parser.add_argument('input', metavar='NFA', type=str)
 
-    # 4 commands for NFA
+    # commands for NFA
     subparser = parser.add_subparsers(
         help='command', dest='command')
-
-    # reduction
-    reduce_parser = subparser.add_parser(
-        'reduce', help='NFA reduction',
-        parents = [general_parser, nfa_input_parser])
-    reduce_parser.add_argument(
-        '-f','--freq',type=str,help='packets frequencies')
 
     # rabit tool
     rabit_parser = subparser.add_parser(
@@ -192,11 +183,6 @@ def main():
         help='show transition labels')
     dot_parser.add_argument(
         '-s', '--show', action='store_true', help='show result')
-
-    # light-weight minimization
-    lmin_parser = subparser.add_parser(
-        'lmin', help='minimizes NFA by light-weight minimization',
-        parents = [general_parser, nfa_input_parser])
 
     # some statistics about the NFA
     nfastats_parser = subparser.add_parser(
@@ -274,11 +260,6 @@ def main():
         proc = 'java -jar ' + jarfile + ' ' + aut1_ba.name + ' ' + \
         aut2_ba.name + ' -fast -finite'
         subprocess.call(proc.split())
-    elif args.command == 'lmin':
-        aut = Nfa.parse(args.input)
-        aut.lightweight_minimization()
-        gen = aut.write()
-        write_output(args.output, gen)
     elif args.command == 'dot':
         _freq = None
         if args.freq:
@@ -357,31 +338,6 @@ def main():
         else:
             plt.hist(vals)
         plt.show()
-    elif args.command == 'reduce':
-        aut = Nfa.parse(args.input)
-        #'''
-        reduction = GradientReduction(aut, 0.3)
-        reduction.evaluate_states(args.freq)
-        reduction.reduce(verbose=True)
-        gen = aut.write()
-        write_output(args.output, gen)
-        
-        return
-        # '''
-        with open(args.freq, 'r') as f:
-            mx = np.loadtxt(f, delimiter=' ')
-        mx = mx / mx.sum()
-        val = aut.eval_states(mx)
-        write_output('aut.dot', aut.write_dot(freq=val))
-        subprocess.call('dot -Tjpg aut.dot -o aut.jpg'.split())
-        subprocess.call('xdg-open aut.jpg'.split())
-        return
-
-        reduction = PruneReduction(aut, 0.3)
-        reduction.evaluate_states(args.freq)
-        reduction.reduce(verbose=True)
-        gen = aut.write()
-        write_output(args.output, gen)
     else:
         assert False
 

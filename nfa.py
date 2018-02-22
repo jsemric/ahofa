@@ -257,82 +257,6 @@ class Nfa:
 
         self._final_states -= to_remove
 
-
-    def lightweight_minimization(self, collapse_finals=False):
-        '''
-        TODO Add comment.
-        '''
-        to_remove = set()
-        succ = self.succ
-        pred = self.pred
-        for s in self.succ[self._initial_state]:
-            if self._has_path_over_alph(self._initial_state, s) and \
-               self._has_path_over_alph(s, s):
-                to_remove.add(s)
-
-        if len(to_remove) > 1:
-            #print(len(to_remove))
-            #print(to_remove)
-            state = to_remove.pop()
-            self.merge_states({x:state for x in to_remove})
-        '''
-        # remove states & add transitions
-        for s in to_remove:
-            for p in pred[s]:
-                for key, val in self._transitions[p].items():
-                    val.discard(s)
-
-            for key, val in self._transitions[s].items():
-                for x in val:
-                    self._add_rule(state, x, key)
-        '''
-        # remove another self-loop state generators
-        sl_stats = defaultdict(set)
-        for s in succ[state]:
-            print(s)
-            if s == state:
-                continue
-            # check for self-loop
-            if s in succ[s]:
-                symbols = ''
-                for sym, states in self._transitions[s].items():
-                    if s in states:
-                        symbols += chr(sym)
-                sl_stats[symbols].add(s)
-
-        print(sl_stats)
-        mapping = dict()
-        for states in sl_stats.values():
-            _s = states.pop()
-            for s in states:
-                mapping[s] = _s
-
-        finals = self._final_states
-        # merge all final states to one
-        if collapse_finals:
-            #self.collapse_final_states()
-            _f = finals.pop()
-            for f in finals:
-                mapping[f] = _f
-        else:
-            #self.remove_unreachable()
-            # merge finals states in 1 rule to one final state
-            rules = self.split_to_rules()
-            for i in rules.values():
-                first = None
-                for s in i:
-                    if s in finals:
-                        if first == None:
-                            first = s
-                        else:
-                            mapping[s] = first
-
-        if len(mapping):
-            self.merge_states(mapping, merge_finals=True)
-
-    def collapse_final_states(self):
-        self.merge_states()
-
     def clear_final_state_selfloop(self):
         trans = self._transitions
         for fstate in self._final_states:
@@ -401,28 +325,6 @@ class Nfa:
         self._final_states = set(
             [mapping[x] if x in mapping else x
             for x in self._final_states.copy()])
-
-
-    def eval_states(self, mx):
-        sym_in = defaultdict(set)
-        sym_out = defaultdict(set)
-        val = dict()
-
-        for state, rules in self._transitions.items():
-            for sym, value in rules.items():
-                sym_out[state].add(sym)
-                for q in value:
-                    sym_in[q].add(sym)
-
-        for s in self.states:
-            v = 0
-            for i in sym_in[s]:
-                for j in sym_out[s]:
-                    v += mx[i][j]
-            #val[s] = math.log2(v+0.0000000001)
-            val[s] = v
-
-        return val
 
     ###########################################################################
     # IO METHODS
@@ -516,7 +418,7 @@ class Nfa:
         succ = self.succ
 
         if states == None:
-            states = list(self.states)
+            states = set(self.states)
 
         if rules != None:
             r = self.split_to_rules()
@@ -554,7 +456,7 @@ class Nfa:
                     'q{}\n'.format(shape, color, freq[state],state)
         else:
             yield '{node [shape = doublecircle, style=filled, fillcolor=red];'
-            yield ';'.join(['q' + str(qf) for qf in self._final_states]) + '\n'
+            yield ';'.join(['q' + str(qf) for qf in self._final_states & states]) + '\n'
             yield '}\n'
 
         # initial state

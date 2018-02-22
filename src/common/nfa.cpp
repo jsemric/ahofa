@@ -25,19 +25,17 @@ Nfa::Nfa(const Nfa &nfa)
     transitions = nfa.transitions;
 }
 
-void Nfa::read_from_file(
-    const char *input, map<State,set<State>> *final_states_map)
+void Nfa::read_from_file(const char *input)
 {
     ifstream in{input};
     if (!in.is_open()) {
         throw runtime_error("error loading NFA");
     }
-    read_from_file(in, final_states_map);
+    read_from_file(in);
     in.close();
 }
 
-void Nfa::read_from_file(
-    ifstream &input, map<State,set<State>> *final_states_map)
+void Nfa::read_from_file(ifstream &input)
 {
     bool no_final = true;
     string buf, init;
@@ -92,7 +90,6 @@ void Nfa::set_final_states(const vector<string> &finals)
 void Nfa::set_transitions(const vector<TransFormat> &trans)
 {
     for (auto i : trans) {
-        // XXX unsafe
         State pstate = stoi(i.first);
         State qstate = stoi(i.second);
         Symbol symbol = hex_to_int(i.third);
@@ -142,10 +139,13 @@ void Nfa::merge_states(const map<State,State> &mapping)
 {
     // verify mapping
     for (auto i : mapping) {
-        if (!is_state(i.first) || !is_state(i.second) ||
-            initial_state == i.first)
+        if (!is_state(i.first) || !is_state(i.second))
+            
         {
-            throw runtime_error("cannot merge states");
+            throw runtime_error("cannot merge non-existing states");
+        }
+        if (initial_state == i.first) {
+            throw runtime_error("cannot merge initial state");
         }
     }
 
@@ -165,7 +165,7 @@ void Nfa::merge_states(const map<State,State> &mapping)
         }
 
         if (is_final(merged_state)) {
-            cerr << i.first << " " << i.second << "\n";
+            // cerr << i.first << " " << i.second << "\n";
             final_states.erase(merged_state);
             final_states.insert(src_state);
         }
@@ -189,8 +189,34 @@ void Nfa::merge_states(const map<State,State> &mapping)
 
     clear_final_state_selfloop();
 }
+/*
+map<State,set<State>> Nfa::split() const {
+    map<State,set<State>> ret;
+    // states which cannot be merged
+    auto pr = pred();
+    for (auto f : final_states) {
+        ret[f].insert(f);
+        set<State> actual = pr[f];
+        set<State> visited{f};
+        while (!actual.empty()) {
+            set<State> next;
+            set_union(visited, actual);
+            for (auto i : actual) {
+                ret[i].insert(f);
+                for (auto j : pr[i]) {
+                    if (visited.find(j) == visited.end()) {
+                        next.insert(j);
+                    }
+                }
+            }
+            actual = move(next);
+        }
+    }
 
-map<State,State> Nfa::get_paths() const
+    return ret;
+}
+*/
+map<State,State> Nfa::split_to_rules() const
 {
     set<State> visited{initial_state};
     map<State,State> ret;
@@ -200,7 +226,7 @@ map<State,State> Nfa::get_paths() const
     for (auto i : transitions.at(initial_state)) {
         bool cond  = true;
         for (auto j : i.second) {
-            if (has_selfloop_to_self(j)) {
+            if (has_selfloop_over_alph(j)) {
                 visited.insert(j);
                 ret[j] = initial_state;
                 cond = false;
@@ -252,7 +278,7 @@ void Nfa::print(ostream &out) const
     }
 }
 
-bool Nfa::has_selfloop_to_self(State s) const
+bool Nfa::has_selfloop_over_alph(State s) const
 {
     int cnt = 0;
     for (auto i : transitions.at(s)) {
@@ -271,6 +297,7 @@ void Nfa::clear_final_state_selfloop()
         bool remove = true;
         for (auto &i : transitions[f]) {
             auto &states = i.second;
+            // remove states only with self-loop
             if (states.size() > 1 ||
                 (states.size() == 1 && states.find(f) == states.end()))
             {
@@ -280,11 +307,25 @@ void Nfa::clear_final_state_selfloop()
         }
         if (remove) {
             transitions[f].clear();
-            //cerr << "now!\n";
         }
     }
 }
 
+void Nfa::collapse_final_states()
+{
+    map<State,State> mapping;
+    State first = initial_state;
+    for (auto i : final_states) {
+        if (first == initial_state) {
+            first = i;
+        }
+        else {
+            mapping[i] = first;
+        }
+    }
+    merge_states(mapping);
+}
+/*
 template<typename FuncType>
 void Nfa::breadth_first_search(FuncType handler) const
 {
@@ -306,7 +347,7 @@ void Nfa::breadth_first_search(FuncType handler) const
         set_union(visited, actual);
         actual = move(next);
     }
-}
+}*/
 
 map<State,unsigned> Nfa::state_depth() const
 {
@@ -335,6 +376,97 @@ map<State,unsigned> Nfa::state_depth() const
     return ret;
 }
 
+void Nfa::reduce(map<State,size_t> state_freq)
+{
+    auto suc = succ();
+    auto depth = state_depth();
+    map<State,State> mapping;
+    auto rules = split_to_rules();
+    int cnt=0;
+    int cnt2=0;
+    set<State> to_merge;
+
+    set<State> actual{initial_state};
+    set<State> visited{initial_state};
+
+    while (!actual.empty())
+    {
+        set<State> next;
+        for (auto state : actual)
+        {
+            auto freq = state_freq[state];
+            for (auto next_state : suc[state])
+            {
+                if (visited.find(next_state) == visited.end())
+                {
+                    if (state_freq[next_state] > 0)
+                    {
+                        if (false && depth[state] > 2 &&
+                            1.0 * state_freq[next_state] / freq > 0.999)
+                        {
+                            cnt2++;
+                            if (mapping.find(state) != mapping.end())
+                            {
+                                mapping[next_state] = mapping[state];
+                            }
+                            else
+                            {
+                                mapping[next_state] = state;   
+                            }
+                        }
+                        
+                    }
+                    else
+                    {
+                        cnt++;
+                        mapping[next_state] = rules[next_state];
+                    }
+                    next.insert(next_state);
+                    visited.insert(next_state);
+                }
+            }
+        }
+        //set_union(visited, actual);
+        actual = move(next);
+    }
+
+/*
+    for (auto i : state_freq) {
+        auto state = i.first;
+        auto freq = i.second;
+        if (is_final(state)) continue;
+        if (freq == 0) {
+            cnt++;
+            mapping[state] = rules[state];
+            to_merge.insert(rules[state]);
+        }
+        else if (1 && depth[state] > 2) {
+            for (auto j : suc[state]) {
+                if (1.0 * state_freq[j] / freq > 0.999) {
+                    cnt2++;
+                    if (mapping.find(state) != mapping.end()) {
+                        mapping[j] = mapping[state];
+                    }
+                    else {
+                        mapping[j] =  state;   
+                    }
+                    to_merge.insert(state);
+                }
+            }
+        }
+    }
+*/
+    for (auto i : to_merge) {
+        if (mapping.find(i) != mapping.end()) {
+            cerr << i << "\n";
+            throw runtime_error("FATAL!");
+        }
+
+    }
+    merge_states(mapping);
+    cerr << cnt2 << " " << cnt + cnt2 << endl;
+}
+
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // implementation of FastNfa class methods
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -348,16 +480,20 @@ void FastNfa::build()
 {
     // map states
     State cnt = 0;
-    for (auto i : transitions) {
+    for (auto i : transitions)
+    {
         state_map[i.first] = cnt++;
     }
 
     trans_vector = vector<vector<State>>(state_count() * alph_size);
-    for (auto i : transitions) {
+    for (auto i : transitions)
+    {
         size_t idx_state = state_map[i.first] << shift;
-        for (auto j : i.second) {
+        for (auto j : i.second)
+        {
             size_t symbol = j.first;
-            for (auto state : j.second) {
+            for (auto state : j.second)
+            {
                 assert(idx_state + symbol < trans_vector.size());
                 trans_vector[idx_state + symbol].push_back(state_map[state]);
             }
@@ -365,17 +501,17 @@ void FastNfa::build()
     }
 }
 
-void FastNfa::read_from_file(
-    ifstream &input, map<State,set<State>> *final_states_map)
+void FastNfa::read_from_file(ifstream &input)
 {
-    Nfa::read_from_file(input, final_states_map);
+    Nfa::read_from_file(input);
     build();
 }
 
 map<State,State> FastNfa::get_reversed_state_map() const
 {
     map<State,State> ret;
-    for (auto i : state_map) {
+    for (auto i : state_map)
+    {
         ret[i.second] = i.first;
     }
     return ret;
@@ -384,7 +520,8 @@ map<State,State> FastNfa::get_reversed_state_map() const
 vector<State> FastNfa::get_final_state_idx() const
 {
     vector<State> ret;
-    for (auto i : final_states) {
+    for (auto i : final_states)
+    {
         ret.push_back(state_map.at(i));
     }
     return ret;

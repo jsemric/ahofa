@@ -17,11 +17,13 @@
 
 namespace reduction {
 
+using namespace std;
+
 auto default_lambda = [](){;};
 // transitions serialization format
-using TransFormat = Triple<std::string, std::string, std::string>;
+using TransFormat = Triple<string, string, string>;
 // string vector
-using StrVec = std::vector<std::string>;
+using StrVec = vector<string>;
 using Symbol = uint8_t;
 using State = unsigned long;
 // since we use only packets words can only consist of bytes
@@ -30,51 +32,49 @@ using Word = const unsigned char*;
 class Nfa
 {
 protected:
-    std::set<State> final_states;
+    set<State> final_states;
     State initial_state;
-    std::unordered_map<State, std::unordered_map<Symbol, std::set<State>>>
-    transitions;
+    unordered_map<State, unordered_map<Symbol, set<State>>> transitions;
 
-    void set_transitions(const std::vector<TransFormat> &trans);
-    void set_final_states(const std::vector<std::string> &finals);
-    void set_initial_state(const std::string &init);
+    void set_transitions(const vector<TransFormat> &trans);
+    void set_final_states(const vector<string> &finals);
+    void set_initial_state(const string &init);
 
 public:
     Nfa() : initial_state{0} {}
     Nfa(const Nfa &nfa);
     ~Nfa() {}
 
-    virtual void read_from_file(std::ifstream &input,
-        std::map<State,std::set<State>> *final_states_map = 0);
-    void read_from_file(const char *input,
-        std::map<State,std::set<State>> *final_states_map = 0);
+    virtual void read_from_file(ifstream &input);
+    void read_from_file(const char *input);
 
-    std::set<State> get_final_states() const {return final_states;}
-    State get_initial_state() const {return initial_state;}
-    std::set<State> get_states() const;
-    unsigned long state_count() const {return transitions.size();}
+    void collapse_final_states();
+    
+    set<State> get_final_states() const { return final_states;}
+    State get_initial_state() const { return initial_state;}
+    set<State> get_states() const;
+    unsigned long state_count() const { return transitions.size();}
 
-    bool is_state(State state) const {
+    bool is_state(State state) const 
+    {
         return transitions.find(state) != transitions.end();
     }
 
-    bool is_final(State state) const {
+    bool is_final(State state) const
+    {
         return final_states.find(state) != final_states.end();
     }
 
-    bool has_selfloop_to_self(State s) const;
-    std::map<State,State> get_paths() const;
-    std::map<State,std::set<State>> pred() const;
-    std::map<State,std::set<State>> succ() const;
-    void merge_states(const std::map<State,State> &mapping);
-    void print(std::ostream &out = std::cout) const;
+    bool has_selfloop_over_alph(State s) const;
+    map<State,State> split_to_rules() const;
+    map<State,set<State>> pred() const;
+    map<State,set<State>> succ() const;
+    void merge_states(const map<State,State> &mapping);
+    void print(ostream &out = cout) const;
     void clear_final_state_selfloop();
-    std::map<State,unsigned> state_depth() const;
-
-    template<typename FuncType>
-    void breadth_first_search(FuncType handler) const;
-
+    map<State,unsigned> state_depth() const;
     virtual bool accept(const Word word, unsigned length) const;
+    void reduce(map<State,size_t> state_freq);
 };
 
 
@@ -87,8 +87,9 @@ class FastNfa : public Nfa
 private:
     /// state + symbol = set of states
     /// faster then map, however harder to modify
-    std::vector<std::vector<State>> trans_vector;
-    std::map<State,State> state_map;
+    vector<vector<State>> trans_vector;
+    /// state label -> index
+    map<State,State> state_map;
 
     static const unsigned shift = 8;
     static const unsigned alph_size = 256;
@@ -99,19 +100,22 @@ public:
 
     ~FastNfa() {}
 
-    std::map<State,State> get_state_map() const {return state_map;}
-    std::map<State,State> get_reversed_state_map() const;
-    std::vector<State> get_final_state_idx() const;
+    map<State,State> get_state_map() const {return state_map;}
+    map<State,State> get_reversed_state_map() const;
+    vector<State> get_final_state_idx() const;
     size_t get_initial_state_idx() const { return state_map.at(initial_state);}
+
     using Nfa::read_from_file;
-    virtual void read_from_file(std::ifstream &input,
-        std::map<State,std::set<State>> *final_states_map = 0) override;
+
+    virtual void read_from_file(ifstream &input) override;
+
     void build();
 
     template<typename FuncType1, typename FuncType2 = decltype(default_lambda)>
     void parse_word(
         const Word word, unsigned length, FuncType1 visited_state_handler,
         FuncType2 loop_handler = default_lambda) const;
+
     virtual bool accept(const Word word, unsigned length) const override;
 };
 
@@ -125,15 +129,20 @@ void FastNfa::parse_word(
     const Word word, unsigned length, FuncType1 visited_state_handler,
     FuncType2 loop_handler) const
 {
-    std::set<State> actual{state_map.at(initial_state)};
+    set<State> actual{state_map.at(initial_state)};
 
-    for (unsigned i = 0; i < length && !actual.empty(); i++) {
-        std::set<State> next;
-        for (auto j : actual) {
+    for (unsigned i = 0; i < length && !actual.empty(); i++)
+    {
+        set<State> next;
+        for (auto j : actual) 
+        {
             assert ((j << shift) + word[j] < trans_vector.size());
             auto trans = trans_vector[(j << shift) + word[i]];
-            if (!trans.empty()) {
-                for (auto k : trans) {
+
+            if (!trans.empty())
+            {
+                for (auto k : trans)
+                {
                     // do something with visited state, use this information
                     visited_state_handler(k);
                     next.insert(k);
@@ -142,16 +151,16 @@ void FastNfa::parse_word(
         }
         // call function to do something at the end of current iteration
         loop_handler();
-        actual = std::move(next);
+        actual = move(next);
     }   
 }
 
 inline bool FastNfa::accept(const Word word, unsigned length) const
 {
-    std::set<State> actual{state_map.at(initial_state)};
+    set<State> actual{state_map.at(initial_state)};
 
     for (unsigned i = 0; i < length && !actual.empty(); i++) {
-        std::set<State> next;
+        set<State> next;
         for (auto j : actual) {
             assert ((j << shift) + word[j] < trans_vector.size());
             auto trans = trans_vector[(j << shift) + word[i]];
@@ -165,7 +174,7 @@ inline bool FastNfa::accept(const Word word, unsigned length) const
                 }
             }
         }
-        actual = std::move(next);
+        actual = move(next);
     }   
 
     return false;
@@ -177,10 +186,10 @@ inline bool FastNfa::accept(const Word word, unsigned length) const
 
 inline bool Nfa::accept(const Word word, unsigned length) const
 {
-    std::set<State> actual{initial_state};
+    set<State> actual{initial_state};
 
     for (unsigned i = 0; i < length && !actual.empty(); i++) {
-        std::set<State> next;
+        set<State> next;
         for (auto j : actual) {
             auto trans = transitions.at(j).at(word[i]);
             if (!trans.empty()) {
@@ -192,7 +201,7 @@ inline bool Nfa::accept(const Word word, unsigned length) const
                 }
             }
         }
-        actual = std::move(next);
+        actual = move(next);
     }
 
     return false;

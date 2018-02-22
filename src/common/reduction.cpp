@@ -1,5 +1,5 @@
 /// @author Jakub Semric
-/// 2017
+/// 2018
 
 #include <iostream>
 #include <algorithm>
@@ -10,54 +10,72 @@
 
 namespace reduction {
 
+using namespace std;
+
 void prune(
-    Nfa &nfa, const std::map<State, unsigned long> &state_labels,
+    Nfa &nfa, const map<State, unsigned long> &state_freq,
     float pct, float eps)
 {
     assert(eps == -1 || (eps > 0 && eps <= 1));
     assert(pct > 0 && pct <= 1);
 
-    std::map<State,State> merge_map;
+    map<State,State> merge_map;
     // merge only states with corresponding rule, which is defined by final
     // state
-    std::map<State,State> rule_map = nfa.get_paths();
+    auto rule_map = nfa.split_to_rules();
+    auto depth = nfa.state_depth();
 
-    // sort state_labels
+    // sort state_freq
     // mark which states to prune
-    std::vector<State> sorted_states;
+    vector<State> sorted_states;
     State init = nfa.get_initial_state();
     // total packets
     size_t total = 0;
 
-    for (auto i : state_labels) {
-        if (!nfa.is_final(i.first) && i.first != init) {
+    for (auto i : state_freq)
+    {
+        if (!nfa.is_final(i.first) && i.first != init)
+        {
             sorted_states.push_back(i.first);
         }
         total = total < i.second ? i.second : total;
     }
 
     // sort states in ascending order according to state packet frequencies
-    std::sort(
+    // and state depth
+    sort(
         sorted_states.begin(), sorted_states.end(),
-        [&state_labels](State x, State y) {
-            return state_labels.at(x) < state_labels.at(y);
+        [&state_freq, &depth](State x, State y)
+        {
+            auto _x = state_freq.at(x);
+            auto _y = state_freq.at(y);
+            if (_x == _y)
+            {
+                return depth.at(x) > depth.at(y);
+            }
+            else
+            {
+                return _x < _y;
+            }
         });
 
     float error = 0;
     size_t state_count = nfa.state_count();
     size_t removed = 0;
     
-    if (eps != -1) {
+    if (eps != -1)
+    {
         // use error rate
         while (error < eps && removed < sorted_states.size())
         {
             State state = sorted_states[removed];
             merge_map[state] = rule_map[state];
             removed++;
-            error += (1.0 * state_labels.at(state)) / total;
+            error += (1.0 * state_freq.at(state)) / total;
         }
     }
-    else {
+    else 
+    {
         // use pct rate
         size_t to_remove = (1 - pct) * state_count;
         while (removed < to_remove && removed < sorted_states.size())
@@ -65,48 +83,87 @@ void prune(
             State state = sorted_states[removed];
             merge_map[state] = rule_map[state];
             removed++;
-            error += (1.0 * state_labels.at(state)) / total;
+            error += (1.0 * state_freq.at(state)) / total;
         }
     }
 
     nfa.merge_states(merge_map);
     size_t new_sc = state_count - removed;
     size_t reduced_to = new_sc * 100 / state_count;
-    std::cerr << "Reduction: " << new_sc << "/" << state_count
+    cerr << "Reduction: " << new_sc << "/" << state_count
         << " " << reduced_to << "%\n";
-    std::cerr << "Predicted error: " << error << std::endl;
-
+    cerr << "Predicted error: " << error << endl;
 }
 
-std::vector<std::set<State>> armc(
-    Nfa &nfa, const std::vector<std::set<size_t>> &state_labels)
+void merge_and_prune(
+    Nfa &nfa, const map<State, unsigned long> &state_freq, float pct)
 {
-    std::vector<std::set<State>> eq_states;
-    std::set<State> empty;
-    int cnt = 0;
-    for (size_t i = 0; i < state_labels.size(); i++) {
+    auto suc = nfa.succ();
+    auto depth = nfa.state_depth();
+    map<State,State> mapping;
+    auto rules = nfa.split_to_rules();
+    int cnt_merged = 0;
+    set<State> to_merge;
 
-        if (state_labels[i].empty()) {
-            empty.insert(i);
-            continue;
-        }
+    set<State> actual{nfa.get_initial_state()};
+    set<State> visited{nfa.get_initial_state()};
 
-        std::set<State> eq;
-        for (size_t j = i + 1; j < state_labels.size(); j++) {
-            if (state_labels[i] == state_labels[j]) {
-                eq.insert(j);cnt++;
+    while (!actual.empty())
+    {
+        set<State> next;
+        for (auto state : actual)
+        {
+            auto freq = state_freq.at(state);
+            for (auto next_state : suc[state])
+            {
+                if (visited.find(next_state) == visited.end())
+                {
+                    if (state_freq.at(next_state) > 0)
+                    {
+                        if (depth[state] > 2 &&
+                            1.0 * state_freq.at(next_state) / freq > 0.999)
+                        {
+                            cnt_merged++;
+                            if (mapping.find(state) != mapping.end())
+                            {
+                                mapping[next_state] = mapping[state];
+                            }
+                            else
+                            {
+                                mapping[next_state] = state;   
+                            }
+                        }
+                        
+                    }
+                    else
+                    {
+                        //mapping[next_state] = rules[next_state];
+                    }
+                    next.insert(next_state);
+                    visited.insert(next_state);
+                }
             }
         }
-        if (!eq.empty()) {
-            eq.insert(i);
-            eq_states.push_back(eq);
+        actual = move(next);
+    }
+
+    for (auto i : to_merge) {
+        if (mapping.find(i) != mapping.end()) {
+            cerr << i << "\n";
+            throw runtime_error("FATAL!");
         }
     }
-    eq_states.push_back(empty);
 
-    std::cerr << cnt << "\n";
-    
-    return eq_states;
+    pct -= cnt_merged * 1.0 / nfa.state_count();
+    // prune the rest
+    nfa.merge_states(mapping);
+    auto freq = state_freq;
+    for (auto i : mapping)
+    {
+        freq.erase(i.first);
+    }
+
+    prune(nfa, freq, pct);
 }
 
 }

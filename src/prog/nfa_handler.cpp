@@ -73,6 +73,7 @@ const char *helpstr =
 "  -h            : show this help and exit\n"
 "  -o <FILE>     : specify output file or directory for -s option\n"
 "  -n <NWORKERS> : number of workers to run in parallel\n"
+"  -j            : verbose output in JSON\n"
 "  -f <FILTER>   : define BPF filter, for syntax see man page\n"
 "  -x            : error computing, set by default, positional arguments are\n"
 "                  TARGET REDUCED PCAPS ..., where TARGET is input NFA, \n"
@@ -83,6 +84,7 @@ const char *helpstr =
 "  -l            : label NFA states with traffic, positional arguments are \n"
 "                  NFA PCAPS ...\n"
 "  -r            : NFA reduction, positional arguments are NFA FREQFILE\n"
+"  -t <TYPE>     : reduction types {prune,merge}\n"
 "  -e <N>        : specify reduction max. error, default value is 0.01\n"
 "  -p <N>        : reduce to %, this discards -e option, N i must be within\n"
 "                  interval (0,1)\n";
@@ -94,6 +96,7 @@ bool error_opt = false;
 bool label_opt = false;
 bool reduce_opt = false;
 bool store_sep = false;
+bool to_json = false;
 string outdir = "data/prune-error";
 
 // reduction additional options
@@ -174,9 +177,15 @@ map<State, unsigned long> read_state_labels(
 
 void reduce(const vector<string> &args)
 {
-    if (reduction_type == "prune") {
-        auto labels = read_state_labels(nfa, args[0]);
+    auto labels = read_state_labels(nfa, args[0]);
+
+    if (reduction_type == "prune")
+    {
         prune(nfa, labels, reduce_ratio, eps);
+    }
+    else if (reduction_type == "merge")
+    {
+        merge_and_prune(nfa, labels, reduce_ratio);
     }
 }
 
@@ -185,21 +194,26 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
     vector<bool> bm(reduced.state_count());
     reduced.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
     int match1 = 0;
-    for (size_t i = 0; i < final_state_idx1.size(); i++) {
+
+    for (size_t i = 0; i < final_state_idx1.size(); i++)
+    {
         size_t idx = final_state_idx1[i];
-        if (bm[idx]) {
+        if (bm[idx])
+        {
             match1++;
             data.nfa1_data[idx]++;
         }
     }
 
-    if (match1) {
+    if (match1)
+    {
         data.accepted_reduced++;
         int match2 = 0;
         // something was matched, lets find the difference
         vector<bool> bm(target.state_count());
         target.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
-        for (size_t i = 0; i < final_state_idx2.size(); i++) {
+        for (size_t i = 0; i < final_state_idx2.size(); i++)
+        {
             size_t idx = final_state_idx2[i];
             if (bm[idx]) {
                 match2++;
@@ -207,14 +221,19 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
             }
         }
 
-        if (match1 != match2) {
+        if (match1 != match2)
+        {
             data.wrongly_classified++;
         }
-        else {
+        else
+        {
             data.correctly_classified++;
         }
 
-        if (match2) data.accepted_target++;
+        if (match2)
+        {
+            data.accepted_target++;
+        }
     }
 }
 
@@ -329,7 +348,13 @@ void write_error_data(ostream &out, const Data &data, const string pcapname)
         (data.correctly_classified + data.wrongly_classified);
     unsigned long sc1 = target.state_count();
     unsigned long sc2 = reduced.state_count();
-
+    if (!to_json) {
+        out << "reduction : " << 1.0 * sc2 / sc1 << endl;
+        out << "total     : " << data.total << endl;
+        out << "pe        : " << pe << endl;
+        out << "ce        : " << ce << endl;
+        return;
+    }
     out << "{\n";
     out << "    \"target file\": \"" << nfa_str1 << "\",\n";
     out << "    \"target\": \"" << fs::basename(nfa_str1)
@@ -381,19 +406,9 @@ void write_error_data(ostream &out, const Data &data, const string pcapname)
         out << ",\n";
     }
 
-    if (pcapname != "") {
+    if (pcapname != "")
+    {
         out << "    \"pcap\" : \"" << pcapname << "\",\n";
-    }
-    else {
-        /*
-        out << "    \"pcaps\": [\n";
-        for (size_t i = 0; i < pcaps.size(); i++) {
-            out << "        \"" << pcaps[i] << "\"";
-            if (i == pcaps.size() - 1) {
-                out << "]";
-            }
-            out << ",\n";
-        }*/
     }
     out << "    \"elapsed time\": \"" << min << "m/"
         << sec % 60  << "s/" << msec % 1000 << "ms\"\n";
@@ -407,7 +422,8 @@ void write_output(ostream &out, const vector<string> &pcaps)
     unsigned sec = msec / 1000 / 1000;
     unsigned min = sec / 60;
 
-    if (label_opt) {
+    if (label_opt)
+    {
         out << "# Total packets : " << all_data.total << endl;
 
         out << "# Elapsed time  : " << min << "m/" << sec % 60  << "s/"
@@ -415,19 +431,21 @@ void write_output(ostream &out, const vector<string> &pcaps)
 
         auto state_map = nfa.get_reversed_state_map();
         auto state_depth = target.state_depth();
-        for (unsigned long i = 0; i < target.state_count(); i++) {
+        for (unsigned long i = 0; i < target.state_count(); i++)
+        {
             out << state_map[i] << " " << all_data.nfa1_data[i] << " "
                 << state_depth[state_map[i]] << "\n";
         }
     }
-    else if (error_opt) {
-        if (!store_sep)
-            write_error_data(out, all_data, "");
-    }
-    else if (reduce_opt) {
+    else if (reduce_opt)
+    {
         cerr << "Elapsed time: " << min << "m/" << sec % 60  << "s/"
             << msec % 1000 << "ms\n";
         nfa.print(out);
+    }
+    else {
+        if (!store_sep)
+            write_error_data(out, all_data, "");
     }
 }
 
@@ -451,7 +469,7 @@ int main(int argc, char **argv)
     int opt_cnt = 1;    // program name
     int c;
 
-    try {
+    /*try*/ {
         if (argc < 2) {
             cerr << helpstr;
             return 1;
@@ -482,8 +500,8 @@ int main(int argc, char **argv)
                 case 'l':
                     label_opt = true;
                     break;
-                case 'x':
-                    error_opt = true;
+                case 'j':
+                    to_json = true;
                     break;
                 // reduction additional options
                 case 'e':
@@ -509,8 +527,7 @@ int main(int argc, char **argv)
         }
 
         // resolve conflict options
-        if ((reduce_opt && label_opt) || (error_opt && label_opt) ||
-            (error_opt && reduce_opt))
+        if (reduce_opt && label_opt)
         {
             throw runtime_error("invalid combinations of arguments");
         }
@@ -616,11 +633,11 @@ int main(int argc, char **argv)
             static_cast<ofstream*>(output)->close();
             delete output;
         }
-    }
+    }/*
     catch (exception &e) {
         cerr << "\033[1;31mERROR\033[0m " << e.what() << endl;
         return 1;
-    }
+    }*/
 
     return 0;
 }

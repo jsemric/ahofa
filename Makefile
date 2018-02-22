@@ -9,11 +9,11 @@ SRCDIR=src
 COMMON=$(SRCDIR)/common
 PDIR=$(SRCDIR)/prog
 
-CXXFLAGS=$(STD) -Wall -Wextra -pedantic -I $(COMMON) -O3 #-DNDEBUG
+CXXFLAGS=$(STD) -Wall -Wextra -pedantic  -I $(COMMON) -O3 #-Wfatal-errors #-DNDEBUG
 LIBS=-lpcap -lpthread -lboost_system -lboost_filesystem
 PROG=nfa_handler
 
-all: nfa_handler matrix state_merge_mc lmin
+all: nfa_handler lmin
 
 SRC=$(wildcard $(COMMON)/*.cpp)
 HDR=$(wildcard $(COMMON)/*.hpp)
@@ -45,7 +45,7 @@ state_merge_mc: $(PDIR)/state_merge_mc.o $(OBJ)
 $(PDIR)/state_merge_mc.o: $(PDIR)/state_merge_mc.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
-%.o: %.cpp %.h
+%.o: %.cpp %.hpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
 no-data:
