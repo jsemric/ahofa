@@ -65,10 +65,10 @@ struct Data
 };
 
 const char *helpstr =
-"Program provides several operations with automata. Error computing,\n"
+"The program provides several operations with automata. Error computing,\n"
 "state labeling and reduction. The error computing is set by default, \n"
 "positional arguments are TARGET REDUCED PCAPS ..., where TARGET is an input\n"
-"NFA, REDUCED denotes over-approximated reduction of the of TARGET and\n"
+"NFA, REDUCED denotes over-approximated reduction of the TARGET and\n"
 "PCAPS are packet capture files.\n"
 "Usage: ./nfa_handler [OPTIONS] FILE1 FILE2 ...\n"
 "options:\n"
@@ -207,9 +207,10 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
         }
     }
 
+    data.accepted_reduced += match1 > 0;
+
     if (match1 || consistent)
-    {
-        data.accepted_reduced++;
+    {    
         int match2 = 0;
         // something was matched, lets find the difference
         vector<bool> bm(target.state_count());
@@ -356,13 +357,17 @@ void write_error_data(ostream &out, const Data &data, const string pcapname)
         (data.correctly_classified + data.wrongly_classified);
     unsigned long sc1 = target.state_count();
     unsigned long sc2 = reduced.state_count();
+
     if (!to_json) {
         out << "reduction : " << 1.0 * sc2 / sc1 << endl;
         out << "total     : " << data.total << endl;
         out << "pe        : " << pe << endl;
         out << "ce        : " << ce << endl;
+        out << "duration  : " << min << "m/" << sec % 60 << "s/"
+            << msec % 1000 << "ms\"\n";
         return;
     }
+
     out << "{\n";
     out << "    \"target file\": \"" << nfa_str1 << "\",\n";
     out << "    \"target\": \"" << fs::basename(nfa_str1)
