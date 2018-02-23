@@ -180,15 +180,24 @@ map<State, unsigned long> read_state_labels(
 void reduce(const vector<string> &args)
 {
     auto labels = read_state_labels(nfa, args[0]);
+    auto old_sc = nfa.state_count();
+    float error;
 
     if (reduction_type == "prune")
     {
-        prune(nfa, labels, reduce_ratio, eps);
+        error = prune(nfa, labels, reduce_ratio, eps);
     }
     else if (reduction_type == "merge")
     {
-        merge_and_prune(nfa, labels, reduce_ratio);
+        error = merge_and_prune(nfa, labels, reduce_ratio);
     }
+
+
+    auto new_sc = nfa.state_count();
+
+    cerr << "Reduction: " << new_sc << "/" << old_sc
+        << " " << 100 * new_sc / old_sc << "%\n";
+    cerr << "Predicted error: " << error << endl;
 }
 
 void compute_error(Data &data, const unsigned char *payload, unsigned plen)
@@ -257,13 +266,14 @@ void label_states(
     reached_states.nfa1_data[nfa.get_initial_state_idx()]++;
 }
 
-string gen_output_name(string nfa, string pcap)
+string gen_output_name(string pcap)
 {
     string base = outdir + "/" +
                   fs::basename(nfa_str1) + "." +
                   fs::path(pcap).filename().string() + ".";
     string res;
     string hash = "00000";
+    int i = 0;
     do {
         hash[0] = '0' + (rand()%10);
         hash[1] = '0' + (rand()%10);
@@ -271,7 +281,7 @@ string gen_output_name(string nfa, string pcap)
         hash[3] = '0' + (rand()%10);
         hash[4] = '0' + (rand()%10);
         res = base + hash + ".json";
-    } while (fs::exists(res));
+    } while (fs::exists(res) || i++ > 100000);
 
     return res;
 }
@@ -300,7 +310,7 @@ void process_pcaps(
                 }, filter_expr);
 
             if (store_sep && error_opt) {
-                auto fname = gen_output_name(nfa_str1, pcaps[i]);
+                auto fname = gen_output_name(nfa_str1);
                 ofstream out(fname);
                 if (out.is_open()) {
                     write_error_data(out, local_data, pcaps[i]);
@@ -428,7 +438,7 @@ void write_error_data(ostream &out, const Data &data, const string pcapname)
     out << "}\n";
 }
 
-void write_output(ostream &out, const vector<string> &pcaps)
+void write_output(ostream &out)
 {
     unsigned msec = chrono::duration_cast<chrono::microseconds>(
         chrono::steady_clock::now() - timepoint).count();
@@ -592,6 +602,7 @@ int main(int argc, char **argv)
         ostream *output = &cout;
         if (outfile) {
             if (store_sep) {
+                outdir = outfile;
                 if (!fs::is_directory(outfile)) {
                     throw runtime_error("invalid directory");
                 }
@@ -642,7 +653,7 @@ int main(int argc, char **argv)
             }
         }
 
-        write_output(*output, pcaps);
+        write_output(*output);
 
         if (outfile) {
             cerr << "Saved to \"" << outfile << "\"\n";

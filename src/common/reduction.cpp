@@ -12,7 +12,7 @@ namespace reduction {
 
 using namespace std;
 
-void prune(
+float prune(
     Nfa &nfa, const map<State, unsigned long> &state_freq,
     float pct, float eps)
 {
@@ -89,11 +89,8 @@ void prune(
         }
 
         nfa.merge_states(merge_map);
-        size_t new_sc = state_count - removed;
-        size_t reduced_to = new_sc * 100 / state_count;
-        cerr << "Reduction: " << new_sc << "/" << state_count
-            << " " << reduced_to << "%\n";
-        cerr << "Predicted error: " << error << endl;
+
+        return error;
     }
     catch (out_of_range &e)
     {
@@ -104,7 +101,7 @@ void prune(
     }
 }
 
-void merge_and_prune(
+float merge_and_prune(
     Nfa &nfa, const map<State, unsigned long> &state_freq, float pct)
 {
     auto suc = nfa.succ();
@@ -161,7 +158,7 @@ void merge_and_prune(
 
     // change the reduction ratio in order to adjust pruning
     double scnt = nfa.state_count();
-    pct -= scnt * pct / (scnt - cnt_merged);
+    pct -= pct - scnt * pct / (scnt - cnt_merged);
 
     // prune the rest
     nfa.merge_states(mapping);
@@ -171,7 +168,7 @@ void merge_and_prune(
         freq.erase(i.first);
     }
 
-    prune(nfa, freq, pct);
+    return prune(nfa, freq, pct);
 }
 
 }
