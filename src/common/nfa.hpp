@@ -2,6 +2,7 @@
 /// 2018
 
 #pragma once
+#pragma GCC diagnostic ignored "-Wtautological-compare"
 
 #include <iostream>
 #include <vector>
@@ -19,7 +20,6 @@ namespace reduction {
 
 using namespace std;
 
-auto default_lambda = [](){;};
 // transitions serialization format
 using TransFormat = Triple<string, string, string>;
 // string vector
@@ -28,6 +28,10 @@ using Symbol = uint8_t;
 using State = unsigned long;
 // since we use only packets words can only consist of bytes
 using Word = const unsigned char*;
+
+auto default_lambda1 = [](){;};
+auto default_lambda2 = [](){return 0;};
+auto default_lambda3 = [](State s){return s == s;};
 
 class Nfa
 {
@@ -73,7 +77,22 @@ public:
     map<State,set<State>> succ() const;
     map<State,unsigned> state_depth() const;
     void clear_final_state_selfloop();
-    void collapse_final_states();
+    void merge_final_states(bool merge_all_states = false);
+    void remove_unreachable();
+
+    template<
+    typename FuncType1 = decltype(default_lambda3),
+    typename FuncType2 = decltype(default_lambda2)>
+    std::set<State> breadth_first_search(
+        FuncType1 func1 = default_lambda3,
+        FuncType2 func2 = default_lambda2,
+        set<State> actual = set<State>{},
+        set<State> visited = set<State>{}) const;
+
+    std::set<State> breadth_first_search(set<State> actual) const
+    {
+        return breadth_first_search(default_lambda3, default_lambda2, actual);
+    }
     
     // essential
     void merge_states(const map<State,State> &mapping);
@@ -115,10 +134,10 @@ public:
 
     void build();
 
-    template<typename FuncType1, typename FuncType2 = decltype(default_lambda)>
+    template<typename FuncType1, typename FuncType2 = decltype(default_lambda1)>
     void parse_word(
         const Word word, unsigned length, FuncType1 visited_state_handler,
-        FuncType2 loop_handler = default_lambda) const;
+        FuncType2 loop_handler = default_lambda1) const;
 
     virtual bool accept(const Word word, unsigned length) const override;
 };
@@ -209,6 +228,48 @@ inline bool Nfa::accept(const Word word, unsigned length) const
     }
 
     return false;
+}
+
+template<typename FuncType1, typename FuncType2>
+set<State> Nfa::breadth_first_search(
+    FuncType1 func1, FuncType2 func2,
+    set<State> actual, set<State> visited) const
+{
+    if (actual.empty())
+        actual = set<State>{initial_state};
+    if (visited.empty())
+        visited = actual;
+
+    while (!actual.empty()) 
+    {
+        set<State> next;
+        for (auto s : actual) 
+        {
+            if (func1(s)) 
+            {
+                for (auto i : transitions.at(s))
+                {
+                    for (auto j : i.second)
+                    {
+                        if (visited.find(j) == visited.end())
+                        {
+                            next.insert(j);
+                            visited.insert(j);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (func2())
+        {
+            break;
+        }
+
+        actual = move(next);
+    }
+
+    return visited;
 }
 
 }   // end of namespace reduction

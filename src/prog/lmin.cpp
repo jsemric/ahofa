@@ -17,6 +17,7 @@ const char *helpstr=
 "  -f   : merge all final states to one final\n"
 "  -v   : verbose mode\n";
 
+
 int main(int argc, char **argv) {
 
     if (argc < 3) {
@@ -26,7 +27,7 @@ int main(int argc, char **argv) {
     }
 
     int opt_cnt = 1;
-    bool merge_finals = 0;
+    bool merge_all_finals = 0;
     bool verbose = 0;
     int c;
     while ((c = getopt(argc, argv, "hvf")) != -1) {
@@ -37,7 +38,7 @@ int main(int argc, char **argv) {
                 cerr << helpstr;
                 return 0;
             case 'f':
-                merge_finals = true;
+                merge_all_finals = true;
                 break;
             case 'v':
                 verbose = true;
@@ -50,6 +51,9 @@ int main(int argc, char **argv) {
     try {
         FastNfa nfa;
         nfa.read_from_file(argv[opt_cnt]);
+        size_t old_cnt = nfa.state_count();
+        nfa.merge_final_states(merge_all_finals);
+        nfa.build();
 
         vector<vector<size_t>> state_labels(nfa.state_count());
         unsigned prefix = 0;
@@ -73,7 +77,6 @@ int main(int argc, char **argv) {
 
         auto state_map = nfa.get_reversed_state_map();
         map<State,State> mapping;
-        int cnt = 0;
 
         // find equivalent states and merge them
         for (size_t i = 0; i < state_labels.size(); i++) {
@@ -90,20 +93,14 @@ int main(int argc, char **argv) {
                             cerr << state_map[j] << "->" << state_map[i]
                                 << endl;
                         }
-                        cnt++;
                     }
                 }
             }
         }
 
-        if (verbose) {
-            cerr << "Removed: " << cnt << endl;
-        }
-
         nfa.merge_states(mapping);
-
-        if (merge_finals) {
-            nfa.collapse_final_states();
+        if (verbose) {
+            cerr << "Removed: " << old_cnt - nfa.state_count() << endl;
         }
 
         ofstream out{argv[opt_cnt + 1]};

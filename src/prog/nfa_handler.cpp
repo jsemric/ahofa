@@ -373,6 +373,7 @@ void write_error_data(ostream &out, const Data &data, const string pcapname)
         out << "total     : " << data.total << endl;
         out << "pe        : " << pe << endl;
         out << "ce        : " << ce << endl;
+        out << "+rate     : " << cls_ratio << endl;
         out << "duration  : " << min << "m/" << sec % 60 << "s/"
             << msec % 1000 << "ms\"\n";
         return;
