@@ -11,9 +11,8 @@ PDIR=$(SRCDIR)/prog
 
 CXXFLAGS=$(STD) -Wall -Wextra -pedantic  -I $(COMMON) -O3 #-Wfatal-errors #-DNDEBUG
 LIBS=-lpcap -lpthread -lboost_system -lboost_filesystem
-PROG=nfa_handler
 
-all: nfa_handler lmin
+all: nfa_error lmin reduce
 
 SRC=$(wildcard $(COMMON)/*.cpp)
 HDR=$(wildcard $(COMMON)/*.hpp)
@@ -21,10 +20,16 @@ OBJ=$(patsubst %.cpp, %.o, $(SRC))
 
 .PHONY: clean all
 
-nfa_handler: $(PDIR)/nfa_handler.o $(OBJ)
+nfa_error: $(PDIR)/nfa_error.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
-$(PDIR)/nfa_handler.o: $(PDIR)/nfa_handler.cpp
+$(PDIR)/nfa_error.o: $(PDIR)/nfa_error.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
+
+reduce: $(PDIR)/reduce.o $(OBJ)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
+
+$(PDIR)/reduce.o: $(PDIR)/reduce.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
 lmin: $(PDIR)/lmin.o $(OBJ)

@@ -13,7 +13,6 @@
 #include <mutex>
 #include <thread>
 #include <chrono>
-#include <array>
 #include <ctype.h>
 #include <getopt.h>
 
@@ -42,8 +41,8 @@ struct Data
     size_t wrongly_classified;
     size_t correctly_classified;
 
-    Data(size_t data_size1 = 1, size_t data_size2 = 1) :
-        nfa1_data(data_size1), nfa2_data(data_size2), total{0},
+    Data(size_t data_reduced_size = 1, size_t data_target_size = 1) :
+        nfa1_data(data_reduced_size), nfa2_data(data_target_size), total{0},
         accepted_reduced{0}, accepted_target{0}, wrongly_classified{0},
         correctly_classified{0} {}
 
@@ -65,12 +64,11 @@ struct Data
 };
 
 const char *helpstr =
-"The program provides several operations with automata. Error computing,\n"
-"state labeling and reduction. The error computing is set by default, \n"
-"positional arguments are TARGET REDUCED PCAPS ..., where TARGET is an input\n"
-"NFA, REDUCED denotes over-approximated reduction of the TARGET and\n"
-"PCAPS are packet capture files.\n"
-"Usage: ./nfa_handler [OPTIONS] FILE1 FILE2 ...\n"
+"The program computes an error of an incorrect packet classification by an\n"
+"over-approximated NFA. Positional arguments are TARGET REDUCED PCAPS ...,\n"
+"where TARGET is an input NFA, REDUCED denotes over-approximated reduction of\n"
+"the TARGET and PCAPS are packet capture files.\n"
+"Usage: ./nfa_handler [OPTIONS] TARGET REDUCED ...\n"
 "options:\n"
 "  -h            : show this help and exit\n"
 "  -o <FILE>     : specify output file or directory for -s option\n"
@@ -80,30 +78,15 @@ const char *helpstr =
 "  -c            : Rigorous error computation. Consistent but much slower.\n"
 "                  Use only if not sure about over-approximation\n"
 "  -s            : store results to a separate file per each packet capture\n"
-"                  file\n"
-"  -l            : label NFA states with traffic, positional arguments are \n"
-"                  NFA PCAPS ...\n"
-"  -r            : NFA reduction, positional arguments are NFA FREQFILE\n"
-"  -t <TYPE>     : reduction types {prune,merge}\n"
-"  -e <N>        : specify reduction max. error, default value is 0.01\n"
-"  -p <N>        : reduce to %, this discards -e option, N i must be within\n"
-"                  interval (0,1)\n";
+"                  file\n";
 
 // general program options
 unsigned nworkers = 1;
 const char *filter_expr;
-bool error_opt = false;
-bool label_opt = false;
-bool reduce_opt = false;
 bool store_sep = false;
 bool to_json = false;
 bool consistent = false;
 string outdir = "data/prune-error";
-
-// reduction additional options
-string reduction_type = "prune";
-float eps = -1;
-float reduce_ratio = 0.01;
 
 // thread communication
 bool continue_work = true;
@@ -112,23 +95,17 @@ mutex mux;
 // common data
 Data all_data;
 FastNfa target, reduced;
-FastNfa &nfa = target;
 string nfa_str1, nfa_str2;
 
 // error computing data
-vector<size_t> final_state_idx1;
-vector<size_t> final_state_idx2;
+vector<size_t> final_state_idx_reduced;
+vector<size_t> final_state_idx_target;
 // maps state to state string name
-map<State,State> state_map1;
-map<State,State> state_map2;
-auto &state_map = state_map2;
+map<State,State> state_map_reduced;
+map<State,State> state_map_target;
 
 // time statistics
 chrono::steady_clock::time_point timepoint;
-
-// function declarations
-void label_states(
-     Data &reached_states, const unsigned char *payload, unsigned plen);
 
 // gather results
 void sum_up(const Data &data)
@@ -146,69 +123,15 @@ void sighandl(int signal)
     continue_work = false;
 }
 
-map<State, unsigned long> read_state_labels(
-    const Nfa &nfa, const string &fname)
-{
-    map<State, unsigned long> ret;
-    ifstream in{fname};
-    if (!in.is_open()) {
-        throw runtime_error("error loading NFA");
-    }
-
-    string buf;
-    while (getline(in, buf)) {
-        // remove '#' comment
-        buf = buf.substr(0, buf.find("#"));
-        if (buf == "") {
-            continue;
-        }
-        istringstream iss(buf);
-        State s;
-        unsigned long l;
-        if (!(iss >> s >> l)) {
-            throw runtime_error("invalid state labels syntax");
-        }
-        if (!nfa.is_state(s)) {
-            throw runtime_error("invalid NFA state: " + to_string(s));
-        }
-        ret[s] = l;
-    }
-    in.close();
-    return ret;
-}
-
-void reduce(const vector<string> &args)
-{
-    auto labels = read_state_labels(nfa, args[0]);
-    auto old_sc = nfa.state_count();
-    float error;
-
-    if (reduction_type == "prune")
-    {
-        error = prune(nfa, labels, reduce_ratio, eps);
-    }
-    else if (reduction_type == "merge")
-    {
-        error = merge_and_prune(nfa, labels, reduce_ratio);
-    }
-
-
-    auto new_sc = nfa.state_count();
-
-    cerr << "Reduction: " << new_sc << "/" << old_sc
-        << " " << 100 * new_sc / old_sc << "%\n";
-    cerr << "Predicted error: " << error << endl;
-}
-
 void compute_error(Data &data, const unsigned char *payload, unsigned plen)
 {
     vector<bool> bm(reduced.state_count());
     reduced.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
     int match1 = 0;
 
-    for (size_t i = 0; i < final_state_idx1.size(); i++)
+    for (size_t i = 0; i < final_state_idx_reduced.size(); i++)
     {
-        size_t idx = final_state_idx1[i];
+        size_t idx = final_state_idx_reduced[i];
         if (bm[idx])
         {
             match1++;
@@ -224,9 +147,9 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
         // something was matched, lets find the difference
         vector<bool> bm(target.state_count());
         target.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
-        for (size_t i = 0; i < final_state_idx2.size(); i++)
+        for (size_t i = 0; i < final_state_idx_target.size(); i++)
         {
-            size_t idx = final_state_idx2[i];
+            size_t idx = final_state_idx_target[i];
             if (bm[idx])
             {
                 match2++;
@@ -255,17 +178,6 @@ void compute_error(Data &data, const unsigned char *payload, unsigned plen)
     }
 }
 
-void label_states(
-     Data &reached_states, const unsigned char *payload, unsigned plen)
-{
-    vector<bool> bm(nfa.state_count());
-    nfa.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
-    for (size_t i = 0; i < reached_states.nfa1_data.size(); i++) {
-        reached_states.nfa1_data[i] += bm[i];
-    }
-    reached_states.nfa1_data[nfa.get_initial_state_idx()]++;
-}
-
 string gen_output_name(string pcap)
 {
     string base = outdir + "/" +
@@ -288,9 +200,8 @@ string gen_output_name(string pcap)
 
 void write_error_data(ostream &out, const Data &data, const string pcapname);
 
-template<typename Handler>
 void process_pcaps(
-    const vector<string> &pcaps, Data &local_data, Handler handler)
+    const vector<string> &pcaps, Data &local_data)
 {
     for (unsigned i = 0; i < pcaps.size(); i++) {
         try {
@@ -305,11 +216,11 @@ void process_pcaps(
                     }
                     // specific payload handler
                     local_data.total++;
-                    handler(local_data, payload, len);
+                    compute_error(local_data, payload, len);
 
                 }, filter_expr);
 
-            if (store_sep && error_opt) {
+            if (store_sep) {
                 auto fname = gen_output_name(nfa_str1);
                 ofstream out(fname);
                 if (out.is_open()) {
@@ -318,7 +229,7 @@ void process_pcaps(
                 }
                 else {
                     throw ofstream::failure(
-                        "cannot open result file: " + fname);
+                        "cannot open file: " + fname);
                 }
             }
         }
@@ -409,22 +320,22 @@ void write_error_data(ostream &out, const Data &data, const string pcapname)
     out << "    \"pe\": " << pe << ",\n";
     // concrete rules results
     out << "    \"reduced rules\": {\n";
-    for (size_t i = 0; i < final_state_idx1.size(); i++) {
-        State s = final_state_idx1[i];
-        out << "        \"q" << state_map1[s]  << "\" : "
+    for (size_t i = 0; i < final_state_idx_reduced.size(); i++) {
+        State s = final_state_idx_reduced[i];
+        out << "        \"q" << state_map_reduced[s]  << "\" : "
             << data.nfa1_data[s];
-        if (i == final_state_idx1.size() - 1) {
+        if (i == final_state_idx_reduced.size() - 1) {
             out << "}";
         }
         out << ",\n";
     }
 
     out << "    \"target rules\": {\n";
-    for (size_t i = 0; i < final_state_idx2.size(); i++) {
-        State s = final_state_idx2[i];
-        out << "        \"q" << state_map2[s]  << "\" : "
+    for (size_t i = 0; i < final_state_idx_target.size(); i++) {
+        State s = final_state_idx_target[i];
+        out << "        \"q" << state_map_target[s]  << "\" : "
             << data.nfa2_data[s];
-        if (i == final_state_idx2.size() - 1) {
+        if (i == final_state_idx_target.size() - 1) {
             out << "\n    }";
         }
         out << ",\n";
@@ -441,45 +352,9 @@ void write_error_data(ostream &out, const Data &data, const string pcapname)
 
 void write_output(ostream &out)
 {
-    unsigned msec = chrono::duration_cast<chrono::microseconds>(
-        chrono::steady_clock::now() - timepoint).count();
-    unsigned sec = msec / 1000 / 1000;
-    unsigned min = sec / 60;
-
-    if (label_opt)
+    if (!store_sep)
     {
-        out << "# Total packets : " << all_data.total << endl;
-
-        out << "# Elapsed time  : " << min << "m/" << sec % 60  << "s/"
-            << msec % 1000 << "ms\n";
-
-        auto state_map = nfa.get_reversed_state_map();
-        auto state_depth = target.state_depth();
-        for (unsigned long i = 0; i < target.state_count(); i++)
-        {
-            out << state_map[i] << " " << all_data.nfa1_data[i] << " "
-                << state_depth[state_map[i]] << "\n";
-        }
-    }
-    else if (reduce_opt)
-    {
-        cerr << "Elapsed time: " << min << "m/" << sec % 60  << "s/"
-            << msec % 1000 << "ms\n";
-        nfa.print(out);
-    }
-    else {
-        if (!store_sep)
-            write_error_data(out, all_data, "");
-    }
-}
-
-void check_float(float x, float max_val = 1, float min_val = 0)
-{
-    if (x > max_val || x < min_val) {
-        throw runtime_error(
-            "invalid float value: \"" + to_string(x) +
-            "\", should be in range (" + to_string(min_val) + "," +
-            to_string(max_val) + ")");
+        write_error_data(out, all_data, "");
     }
 }
 
@@ -499,7 +374,7 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        while ((c = getopt(argc, argv, "ho:n:f:rle:p:t:sjc")) != -1) {
+        while ((c = getopt(argc, argv, "ho:n:f:jcs")) != -1) {
             opt_cnt++;
             switch (c) {
                 // general options
@@ -518,32 +393,11 @@ int main(int argc, char **argv)
                     filter_expr = optarg;
                     opt_cnt++;
                     break;
-                case 'r':
-                    reduce_opt = true;
-                    break;
-                case 'l':
-                    label_opt = true;
-                    break;
                 case 'j':
                     to_json = true;
                     break;
                 case 'c':
                     consistent = true;
-                    break;
-                // reduction additional options
-                case 'e':
-                    opt_cnt++;
-                    eps = stod(optarg);
-                    check_float(eps);
-                    break;
-                case 'p':
-                    opt_cnt++;
-                    reduce_ratio = stod(optarg);
-                    check_float(reduce_ratio);
-                    break;
-                case 't':
-                    opt_cnt++;
-                    reduction_type = optarg;
                     break;
                 case 's':
                     store_sep = true;
@@ -553,14 +407,6 @@ int main(int argc, char **argv)
             }
         }
 
-        // resolve conflict options
-        if (reduce_opt && label_opt)
-        {
-            throw runtime_error("invalid combinations of arguments");
-        }
-
-        error_opt = !reduce_opt && !label_opt;
-
         if (nworkers <= 0 ||
             nworkers >= thread::hardware_concurrency())
         {
@@ -568,10 +414,7 @@ int main(int argc, char **argv)
                 "invalid number of cores \"" + to_string(nworkers) + "\"");
         }
 
-        // checking the min. number of positional arguments
-        int min_pos_cnt = error_opt ? 3 : 2;
-
-        if (argc - opt_cnt < min_pos_cnt)
+        if (argc - opt_cnt < 3)
         {
             throw runtime_error("invalid positional arguments");
         }
@@ -579,22 +422,18 @@ int main(int argc, char **argv)
         // get automata
         nfa_str1 = argv[opt_cnt];
         target.read_from_file(nfa_str1.c_str());
-        size_t size1 = nfa.state_count(), size2 = 1;
-        state_map = nfa.get_reversed_state_map();
+        size_t target_size = target.state_count();
+        state_map_target = target.get_reversed_state_map();
+        final_state_idx_target = target.get_final_state_idx();
         // do some preparation for commands `label` and `error`
-        if (error_opt) {
-            nfa_str2 = argv[opt_cnt + 1];
-            reduced.read_from_file(nfa_str2.c_str());
-            final_state_idx1 = reduced.get_final_state_idx();
-            final_state_idx2 = target.get_final_state_idx();
-            state_map1 = reduced.get_reversed_state_map();
-            state_map2 = target.get_reversed_state_map();
-            size2 = target.state_count();
-            opt_cnt++;
-        }
+        nfa_str2 = argv[opt_cnt + 1];
+        reduced.read_from_file(nfa_str2.c_str());
+        size_t reduced_size = reduced.state_count();
+        state_map_reduced = reduced.get_reversed_state_map();
+        final_state_idx_reduced = reduced.get_final_state_idx();
 
         // get capture files
-        for (int i = opt_cnt + 1/*2 - accepted_only*/; i < argc; i++) {
+        for (int i = opt_cnt + 2/*2 - accepted_only*/; i < argc; i++) {
             pcaps.push_back(argv[i]);
             //cerr << argv[i] << "\n";
         }
@@ -623,34 +462,24 @@ int main(int argc, char **argv)
         }
 
         // start computation
-        if (reduce_opt) {
-            reduce(pcaps);
+        // signal handling
+        signal(SIGINT, sighandl);
+        all_data = Data(reduced_size, target_size);
+
+        vector<thread> threads;
+        for (unsigned i = 0; i < nworkers; i++)
+        {
+            threads.push_back(thread{[&v, i, reduced_size, target_size]()
+                    {
+                        Data local_data(reduced_size, target_size);
+                        process_pcaps(v[i], local_data);
+                    }
+                });
         }
-        else {
-            // signal handling
-            signal(SIGINT, sighandl);
-            all_data = Data(size1, size2);
 
-            vector<thread> threads;
-            for (unsigned i = 0; i < nworkers; i++) {
-                threads.push_back(thread{[&v, i, size1, size2]()
-                        {
-                            Data local_data(size1, size2);
-
-                            if (label_opt) {
-                                process_pcaps(v[i], local_data, label_states);
-                            }
-                            else {
-                                process_pcaps(v[i], local_data, compute_error);
-                            }
-                        }
-                    });
-            }
-
-            for (unsigned i = 0; i < nworkers; i++) {
-                if (threads[i].joinable()) {
-                    threads[i].join();
-                }
+        for (unsigned i = 0; i < nworkers; i++) {
+            if (threads[i].joinable()) {
+                threads[i].join();
             }
         }
 
