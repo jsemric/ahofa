@@ -7,12 +7,13 @@ endif
 
 SRCDIR=src
 COMMON=$(SRCDIR)/common
-PDIR=$(SRCDIR)/prog
+EXE=$(SRCDIR)/exe
 
 CXXFLAGS=$(STD) -Wall -Wextra -pedantic  -I $(COMMON) -O3 #-Wfatal-errors #-DNDEBUG
 LIBS=-lpcap -lpthread -lboost_system -lboost_filesystem
 
-all: nfa_error lmin reduce
+PROG=nfa_error lmin reduce
+all: $(PROG)
 
 SRC=$(wildcard $(COMMON)/*.cpp)
 HDR=$(wildcard $(COMMON)/*.hpp)
@@ -20,34 +21,34 @@ OBJ=$(patsubst %.cpp, %.o, $(SRC))
 
 .PHONY: clean all
 
-nfa_error: $(PDIR)/nfa_error.o $(OBJ)
+nfa_error: $(EXE)/nfa_error.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
-$(PDIR)/nfa_error.o: $(PDIR)/nfa_error.cpp
+$(EXE)/nfa_error.o: $(EXE)/nfa_error.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
-reduce: $(PDIR)/reduce.o $(OBJ)
+reduce: $(EXE)/reduce.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
-$(PDIR)/reduce.o: $(PDIR)/reduce.cpp
+$(EXE)/reduce.o: $(EXE)/reduce.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
-lmin: $(PDIR)/lmin.o $(OBJ)
+lmin: $(EXE)/lmin.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
-$(PDIR)/lmin.o: $(PDIR)/lmin.cpp
+$(EXE)/lmin.o: $(EXE)/lmin.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
-matrix: $(PDIR)/mc.o $(OBJ)
+matrix: $(EXE)/mc.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
-$(PDIR)/mc.o: $(PDIR)/mc.cpp
+$(EXE)/mc.o: $(EXE)/mc.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
-state_merge_mc: $(PDIR)/state_merge_mc.o $(OBJ)
+state_merge_mc: $(EXE)/state_merge_mc.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
-$(PDIR)/state_merge_mc.o: $(PDIR)/state_merge_mc.cpp
+$(EXE)/state_merge_mc.o: $(EXE)/state_merge_mc.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
 %.o: %.cpp %.hpp
@@ -58,4 +59,4 @@ no-data:
 	rm -f obs* tmp* *.fsm *.fa *.pa *.ba
 
 clean:
-	rm -f $(COMMON)/*.o $(PDIR)/*.o nfa_handler
+	rm -f $(COMMON)/*.o $(EXE)/*.o $(PROG)
