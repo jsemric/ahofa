@@ -3,7 +3,6 @@
 
 #include <iostream>
 #include <ostream>
-#include <sstream>
 #include <exception>
 #include <vector>
 #include <map>
@@ -273,7 +272,6 @@ void write_error_data(ostream &out, const Data &data, const string pcapname)
 
     float pe = wrong_acceptances * 1.0 / data.total;
     float ce = data.wrongly_classified * 1.0 / data.total;
-    float ace = (cls1 - cls2) * 1.0 / data.total;
     float cls_ratio = data.correctly_classified * 1.0 /
         (data.correctly_classified + data.wrongly_classified);
     unsigned long sc1 = target.state_count();
@@ -299,25 +297,18 @@ void write_error_data(ostream &out, const Data &data, const string pcapname)
     out << "    \"reduced\": \"" << fs::basename(nfa_str2)
         << "\",\n";
     out << "    \"reduced states\": " << sc2 << ",\n";
-    out << "    \"reduction\": " << 1.0 * sc2 / sc1
-        << ",\n";
     out << "    \"total packets\": " << data.total << ",\n";
-    out << "    \"accepted by target\": " << data.accepted_target
+    out << "    \"accepted target\": " << data.accepted_target
         << ",\n";
-    out << "    \"accepted by reduced\": " << data.accepted_reduced
+    out << "    \"accepted reduced\": " << data.accepted_reduced
         << ",\n";
-    out << "    \"wrong acceptances\": " << wrong_acceptances << ",\n";
     out << "    \"reduced classifications\":" << cls1 << ",\n";
     out << "    \"target classifications\": " << cls2 << ",\n";
-    out << "    \"wrong packet classifications\": "
+    out << "    \"wrong detections\": "
         << data.wrongly_classified << ",\n";
-    out << "    \"correct packet classifications\":"
+    out << "    \"correct detections\":"
         << data.correctly_classified << ",\n";
-    out << "    \"correct packet classifications rate\":"
-        << cls_ratio << ",\n";
-    out << "    \"ace\": " << ace << ",\n";
-    out << "    \"ce\": " << ce << ",\n";
-    out << "    \"pe\": " << pe << ",\n";
+ 
     // concrete rules results
     out << "    \"reduced rules\": {\n";
     for (size_t i = 0; i < final_state_idx_reduced.size(); i++) {
@@ -345,8 +336,6 @@ void write_error_data(ostream &out, const Data &data, const string pcapname)
     {
         out << "    \"pcap\" : \"" << pcapname << "\",\n";
     }
-    out << "    \"elapsed time\": \"" << min << "m/"
-        << sec % 60  << "s/" << msec % 1000 << "ms\"\n";
     out << "}\n";
 }
 
@@ -443,9 +432,10 @@ int main(int argc, char **argv)
         if (outfile) {
             if (store_sep) {
                 outdir = outfile;
-                if (!fs::is_directory(outfile)) {
+                if (!fs::is_directory(outdir)) {
                     throw runtime_error("invalid directory");
                 }
+                outfile = nullptr;
             }
             else {
                 output = new ofstream{outfile};
@@ -483,7 +473,10 @@ int main(int argc, char **argv)
             }
         }
 
-        write_output(*output);
+        if (!store_sep)
+        {
+            write_output(*output);
+        }
 
         if (outfile) {
             cerr << "Saved to \"" << outfile << "\"\n";

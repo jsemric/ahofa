@@ -12,8 +12,6 @@
 #include <ctype.h>
 #include <getopt.h>
 
-#include <boost/filesystem.hpp>
-
 #include "nfa.hpp"
 #include "pcap_reader.hpp"
 #include "reduction.hpp"
@@ -22,7 +20,15 @@ using namespace reduction;
 using namespace std;
 
 const char *helpstr =
-"The program provides error";
+"NFA reduction\n"
+"Usage: ./reduce [OPTIONS] NFA FILE\n"
+"options:\n"
+"  -h            : show this help and exit\n"
+"  -o <FILE>     : specify output file or directory for -s option\n"
+"  -f            : compute packet frequency of NFA states\n"
+"  -t <TYPE>     : reduction type\n"
+"  -p <N>        : reduction rate\n"
+"  -e <N>        : error rate\n";
 
 void label_states(
      FastNfa &nfa, vector<size_t> &state_freq, const unsigned char *payload,
@@ -81,10 +87,10 @@ void check_float(float x, float max_val = 1, float min_val = 0)
 int main(int argc, char **argv)
 {
     // options
-    bool label_opt = false;
+    bool freq_opt = false;
     float eps = -1;
     float pct = -1;
-    string outfile = "reduced-nfa.fa", pcap, red_type = "merge";
+    string outfile = "reduced-nfa.fa", pcap, red_type = "prune";
 
     int opt_cnt = 1;    // program name
     int c;
@@ -95,7 +101,7 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        while ((c = getopt(argc, argv, "ho:le:p:t:")) != -1) {
+        while ((c = getopt(argc, argv, "ho:fe:p:t:")) != -1) {
             opt_cnt++;
             switch (c) {
                 // general options
@@ -106,8 +112,8 @@ int main(int argc, char **argv)
                     outfile = optarg;
                     opt_cnt++;
                     break;
-                case 'l':
-                    label_opt = true;
+                case 'f':
+                    freq_opt = true;
                     break;
                 case 'e':
                     opt_cnt++;
@@ -148,7 +154,7 @@ int main(int argc, char **argv)
             throw runtime_error("cannot open output file");
         }
         
-        if (label_opt)
+        if (freq_opt)
         {
             size_t total = 0;
             vector<size_t> state_freq(nfa.state_count());
@@ -176,7 +182,6 @@ int main(int argc, char **argv)
             auto labels = read_state_labels(nfa, pcap);
             auto old_sc = nfa.state_count();
             float error;
-
             if (red_type == "prune")
             {
                 error = prune(nfa, labels, pct, eps);
@@ -187,7 +192,8 @@ int main(int argc, char **argv)
             }
             else
             {
-                throw runtime_error("invalid reduction type");
+                throw runtime_error(
+                    "invalid reduction type: '" + red_type + "'");
             }
 
             auto new_sc = nfa.state_count();

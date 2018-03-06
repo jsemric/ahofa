@@ -288,7 +288,7 @@ map<State,unsigned> Nfa::state_depth() const
     unsigned depth = 0;
     map<State,unsigned> ret;
     breadth_first_search(
-        [&ret, depth](State s){ ret[s] = depth; return 0;},
+        [&ret, depth](State s){ ret[s] = depth; return 1;},
         [&depth](){depth++; return 0;});
 
     return ret;
