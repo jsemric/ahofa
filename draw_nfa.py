@@ -36,7 +36,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '-o','--output', type=str, metavar='FILE', default="automaton.fa"
+        '-o','--output', type=str, metavar='FILE', default="automaton.dot",
         help='output file')
 
     parser.add_argument('input', metavar='NFA', type=str)
@@ -50,25 +50,25 @@ def main():
     args = parser.parse_args()
 
     # TODO
+    aut = Nfa.parse(args.input)
 
-    _freq = None
     if args.freq:
-        _freq = get_freq(args.freq)
-        aut = Nfa.parse(args.input)
+        freq = get_freq(args.freq)
+        
         gen = aut.write_dot(
-            show_trans=args.trans, freq=_freq,
+            show_trans=args.trans, freq=freq,
             #states=set(s for s,f in _freq.items() if f > 10),
             #rules=10,
-            freq_scale=lambda x: math.log(x + 2), show_diff=_freq != None)
-        fname = args.output if args.output else 'nfa.dot'
-        write_output(fname, gen)
-        if args.show:
-            image = fname.split('.dot')[0] + '.jpg'
-            prog = 'dot -Tjpg ' + fname + ' -o ' + image
-            subprocess.call(prog.split())
-            prog = 'xdg-open ' + image
-            subprocess.call(prog.split())
+            freq_scale=lambda x: math.log(x + 2), show_diff=0)
+    else:
+        gen = aut.write_dot()
 
+    write_output(args.output, gen)
+    image = args.output.split('.dot')[0] + '.jpg'
+    prog = 'dot -Tjpg ' + args.output + ' -o ' + image
+    subprocess.call(prog.split())
+    prog = 'xdg-open ' + image
+    subprocess.call(prog.split())
         
 if __name__ == "__main__":
     main()

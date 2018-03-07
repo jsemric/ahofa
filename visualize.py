@@ -29,8 +29,11 @@ def compare_errors(fname1, fname2):
     # plotting the results
     plt.style.use('ggplot')
     # displaying only values in reasonable ranges
-    ax = df1.plot(y='error', marker='o')
-    df2.plot(ax=ax, y='error', marker='+')
+    print(df1)
+    print(df2)
+    ax = df1.plot(y='error', marker='o', style='.')
+    df2.plot(ax=ax, y='error', marker='o', style='.')
+    #df2.plot(ax=ax, y='error', marker='+')
     # setting axis ranges
     plt.xlim(0.12,0.24)
     plt.ylim(-0.001,0.02)

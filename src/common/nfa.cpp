@@ -361,6 +361,7 @@ void Nfa::remove_unreachable()
     for (auto i : to_remove)
     {
         transitions.erase(i);
+        final_states.erase(i);
     }
 }
 
@@ -371,26 +372,26 @@ void Nfa::merge_final_states(bool merge_all_states)
 {
     map<State,State> mapping;
     vector<set<State>> rules;
+    auto pre = pred();
+    auto suc = succ();
+
     if (merge_all_states)
     {
         rules.push_back(final_states);
     }
     else
     {
-        for (auto &i : transitions[initial_state])
+        for (auto state : suc[initial_state])
         {
-            for (auto j : i.second)
+            if (has_selfloop_over_alph(state) && pre[state].size() == 2)
             {
-                if (has_selfloop_over_alph(j))
-                {
-                    set<State> init{j};
-                    auto rule = breadth_first_search(init);
-                    rules.push_back(rule);
-                }
+                set<State> init{state};
+                auto rule = breadth_first_search(init);
+                rules.push_back(rule);
             }
         }
     }
-    
+
     for (auto i : rules)
     {
         State first = initial_state;
@@ -410,7 +411,8 @@ void Nfa::merge_final_states(bool merge_all_states)
         }
     }
 
-    merge_states(mapping);
+    if (!mapping.empty())
+        merge_states(mapping);
 
     for (auto i : final_states)
     {
@@ -439,7 +441,7 @@ void FastNfa::build()
     {
         state_map[i.first] = cnt++;
     }
-
+ 
     trans_vector = vector<vector<State>>(state_count() * alph_size);
     for (auto i : transitions)
     {
