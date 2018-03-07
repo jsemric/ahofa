@@ -56,7 +56,7 @@ $(EXE)/state_merge_mc.o: $(EXE)/state_merge_mc.cpp
 
 no-data:
 	rm -f *.fa *.dot *.jpg *.json *.jsn tmp*
-	rm -f obs* tmp* *.fsm *.fa *.pa *.ba
+	rm -f obs* tmp* *.fsm *.fa *.pa *.ba *csv
 
 clean:
 	rm -f $(COMMON)/*.o $(EXE)/*.o $(PROG)
