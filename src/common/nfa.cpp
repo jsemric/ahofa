@@ -232,6 +232,39 @@ map<State,State> Nfa::split_to_rules() const
     return ret;
 }
 
+set<State> Nfa::breadth_first_search(set<State> actual) const
+{
+    if (actual.empty())
+    {
+        actual = set<State>{initial_state};
+    }
+    
+    auto visited = actual;
+
+    while (!actual.empty()) 
+    {
+        set<State> next;
+        for (auto s : actual) 
+        {
+            for (auto i : transitions.at(s))
+            {
+                for (auto j : i.second)
+                {
+                    if (visited.find(j) == visited.end())
+                    {
+                        next.insert(j);
+                        visited.insert(j);
+                    }
+                }
+            }
+        }
+
+        actual = move(next);
+    }
+
+    return visited;
+}
+
 void Nfa::print(ostream &out) const
 {
     out << initial_state << "\n";
@@ -287,9 +320,30 @@ map<State,unsigned> Nfa::state_depth() const
 {
     unsigned depth = 0;
     map<State,unsigned> ret;
-    breadth_first_search(
-        [&ret, depth](State s){ ret[s] = depth; return 1;},
-        [&depth](){depth++; return 0;});
+    set<State> actual{initial_state};
+    set<State> visited{initial_state};
+
+    while (!actual.empty()) 
+    {
+        set<State> next;
+        for (auto s : actual) 
+        {
+            ret[s] = depth;
+            for (auto i : transitions.at(s))
+            {
+                for (auto j : i.second)
+                {
+                    if (visited.find(j) == visited.end())
+                    {
+                        next.insert(j);
+                        visited.insert(j);
+                    }
+                }
+            }
+        }
+        depth++;
+        actual = move(next);
+    }
 
     return ret;
 }

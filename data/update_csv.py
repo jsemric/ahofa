@@ -2,18 +2,23 @@
 
 import glob
 import json
+import re
 
 def main():
     all_data = []
-    for i in glob.glob('prune-error/*.json'):
+    duplicates = set()
+    for i in glob.glob('error/*.json'):
         with open(i,'r') as j:
-            all_data.append(json.loads(j.read()))
+            error = json.loads(j.read())
+            if not (error['reduced'], error['pcap']) in duplicates:
+                duplicates.add((error['reduced'], error['pcap']))
+                all_data.append(error)
 
+    nfas = set([re.sub('-r.+$','',x['reduced']) for x in all_data])
 
-    nfas = set([x['target'] for x in all_data])
     # create csv file for each automaton
     for nfa in nfas:
-        data = [x for x in all_data if x['target'] == nfa]
+        data = [x for x in all_data if x['reduced'].startswith(nfa)]
         with open(nfa + '.csv', 'w') as f:
             # first print column names
             #f.write('reduction,states,ace,ce,pe,total,pcap,')
@@ -23,10 +28,10 @@ def main():
             f.write('\n')
             #names = ['reduction', 'reduced states', 'ace', 'ce','pe',
             #    'total packets','pcap']
-            names = ['reduction', 'reduced states', 'accepted by target',
-                'accepted by reduced', 'target classifications',
-                'reduced classifications', 'wrong packet classifications',
-                'correct packet classifications', 'total packets','pcap']
+            names = ['reduction', 'reduced states', 'accepted target',
+                'accepted reduced', 'target classifications',
+                'reduced classifications', 'wrong detections',
+                'correct detections', 'total packets','pcap']
             # print json content to csv
             for j in data:
                 f.write(','.join((str(j[x]) for x in names)))

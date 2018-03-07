@@ -220,7 +220,7 @@ void process_pcaps(
                 }, filter_expr);
 
             if (store_sep) {
-                auto fname = gen_output_name(nfa_str1);
+                auto fname = gen_output_name(pcaps[i]);
                 ofstream out(fname);
                 if (out.is_open()) {
                     write_error_data(out, local_data, pcaps[i]);
@@ -297,12 +297,13 @@ void write_error_data(ostream &out, const Data &data, const string pcapname)
     out << "    \"reduced\": \"" << fs::basename(nfa_str2)
         << "\",\n";
     out << "    \"reduced states\": " << sc2 << ",\n";
+    out << "    \"reduction\": " << 1.0 * sc2 / sc1 << ",\n";
     out << "    \"total packets\": " << data.total << ",\n";
     out << "    \"accepted target\": " << data.accepted_target
         << ",\n";
     out << "    \"accepted reduced\": " << data.accepted_reduced
         << ",\n";
-    out << "    \"reduced classifications\":" << cls1 << ",\n";
+    out << "    \"reduced classifications\": " << cls1 << ",\n";
     out << "    \"target classifications\": " << cls2 << ",\n";
     out << "    \"wrong detections\": "
         << data.wrongly_classified << ",\n";
@@ -334,7 +335,7 @@ void write_error_data(ostream &out, const Data &data, const string pcapname)
 
     if (pcapname != "")
     {
-        out << "    \"pcap\" : \"" << pcapname << "\",\n";
+        out << "    \"pcap\" : \"" << pcapname << "\"\n";
     }
     out << "}\n";
 }
