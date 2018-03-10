@@ -3,6 +3,9 @@
 import glob
 import json
 import re
+import os
+
+folder='error-csv'
 
 def main():
     all_data = []
@@ -19,7 +22,7 @@ def main():
     # create csv file for each automaton
     for nfa in nfas:
         data = [x for x in all_data if x['reduced'].startswith(nfa)]
-        with open(nfa + '.csv', 'w') as f:
+        with open(os.path.join(folder, nfa + '.csv', 'w')) as f:
             # first print column names
             #f.write('reduction,states,ace,ce,pe,total,pcap,')
             f.write('reduction,states,acc1,acc2,cls1,cls2,wrong,correct,')
