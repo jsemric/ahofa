@@ -7,12 +7,13 @@ import numpy as np
 import glob
 
 # some constants
+NOR_DIR = 'snort'
 AUT_DIR = 'min-snort'
 FRQ_DIR = 'data/freq'
 ERR_DIR = 'data/error'
 RED_DIR = 'data/reduced'
 ERROR = './nfa_error'
-PCAPS = 'pcaps/*k.pcap'
+PCAPS = 'pcaps/meter*'
 REDUCE = './reduce'
 NW = 2
 
@@ -28,23 +29,29 @@ def call(prog):
 PCAPS = ' '.join(f for f in glob.glob(PCAPS))
 NW = str(NW)
 
-auts = ['backdoor.rules.fa']
-#ratios = np.arange(0.14,0.4,0.02)
-ratios = np.arange(0.14,0.16,0.02)
-freq_pcap = ['pcaps/20k.pcap']
+#auts = ['ex.web.rules.fa','web-activex.rules.fa']
+auts=[]
+ratios = np.arange(0.10,0.32,0.02)
+freq_pcap = ['pcaps/geant.pcap']
 
 for a in auts:
+    spath = os.path.join(NOR_DIR, a)
     apath = os.path.join(AUT_DIR, a)
+
+    # comment out if already minimized
+    call('./lmin {} {}'.format(spath, apath))
+
     a = a.replace('.fa','')
     pcap_name = ''
     for x in freq_pcap:
         pcap_name += os.path.basename(x.replace('.pcap',''))
 
     freq = os.path.join(FRQ_DIR, a + '-' + pcap_name)
-    prog = '{} -f -o {} {} '.format(REDUCE, freq,apath) + ' '.join(freq_pcap)
+
+    # comment out if frequency has been already computed
+    prog = '{} -f -o {} {} '.format(REDUCE, freq, apath) + ' '.join(freq_pcap)
     call(prog)
-    # state frequency
-    # spc.call(prog.split())
+
     for r in ratios:
         r = str(r)
         # pruning
