@@ -20,18 +20,13 @@ def foo(fname):
         for line in f:
             fstates += 1
 
-    print(fname,len(states),trans,fstates)
+    return (fname, str(len(states)), str(fstates), trans)
 
+def adjust(s1,s2,s3,s4):
+    print(s1.ljust(30), s2.ljust(7), s3.ljust(5), s4)
 
-
+adjust('nfa','states','fin','trans')
 
 for x in sys.argv[1:]:
-    foo(x)
-    '''
-    a = Nfa.parse(x)
-    print(x)
-    trans_cnt = 0
-    for k,v in a._transitions.items():
-        trans_cnt += len(k)
-    print(a.state_count, len(a._final_states))
-    '''
+    v = foo(x)
+    adjust(*v)

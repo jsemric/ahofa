@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import sys
+import re
+import os
 from scipy.stats import zscore
 
 def print_outliers(df):
@@ -23,22 +25,24 @@ def aggr_error(fname):
     df_aggr['error'] = (df_aggr['wrong'] / df_aggr['total'])
     return df_aggr
 
-def compare_errors(fname1, fname2):
+def compare_errors(fname1, fname2, kind='scatter'):
     df1 = aggr_error(fname1)
     df2 = aggr_error(fname2)
-    # plotting the results
     plt.style.use('ggplot')
-    # displaying only values in reasonable ranges
-    print(df1)
-    print(df2)
-    ax = df1.plot(y='error', marker='o', style='.')
-    df2.plot(ax=ax, y='error', marker='o', style='.')
-    #df2.plot(ax=ax, y='error', marker='+')
-    # setting axis ranges
-    plt.xlim(0.12,0.24)
-    plt.ylim(-0.001,0.02)
+
+    ax = df1.reset_index().plot(
+        x='reduction', y='error', color='Red', label='merge', marker='o',
+        kind=kind, s=50)
+    df2.reset_index().plot(
+        x='reduction', ax=ax, y='error', label='prune', marker='D', kind=kind,
+        s=50)
+
+    plt.xlim(0.09,0.23)
+#    plt.ylim(-0.001,0.035)
+    plt.margins(0.05,0.05)
     #plt.grid()
-    plt.title('error')
+    title = os.path.basename(re.sub('-merge.*','',fname1))
+    plt.title(title)
     plt.xlabel('reduction ratio')
     plt.ylabel('error')
     plt.show()
