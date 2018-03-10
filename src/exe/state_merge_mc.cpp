@@ -112,9 +112,8 @@ int main(int argc, char **argv)
                 float pct = same * 1.0 / denom;
                 sim_states[pair<size_t,size_t>(i,j)] =
                     pair<size_t,float>(same, pct);
-                if (pct > 0.5) total++;
+                if (pct > 0.1) total++;
                 //if (state_labels[i] == state_labels[j]) total++;
-                
             }
         }
     }

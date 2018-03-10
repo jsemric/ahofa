@@ -21,30 +21,35 @@ OBJ=$(patsubst %.cpp, %.o, $(SRC))
 
 .PHONY: clean all
 
+# quite fast on multicore
 nfa_error: $(EXE)/nfa_error.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
 $(EXE)/nfa_error.o: $(EXE)/nfa_error.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
+# reduction of automaton by pruning or merging
 reduce: $(EXE)/reduce.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
 $(EXE)/reduce.o: $(EXE)/reduce.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
+# simple minimization
 lmin: $(EXE)/lmin.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
 $(EXE)/lmin.o: $(EXE)/lmin.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
-matrix: $(EXE)/mc.o $(OBJ)
+# n-grams in traffic
+ngrams: $(EXE)/ngrams.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
-$(EXE)/mc.o: $(EXE)/mc.cpp
+$(EXE)/ngrams.o: $(EXE)/ngrams.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
+# merging inspired by predicate logic
 state_merge_mc: $(EXE)/state_merge_mc.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
