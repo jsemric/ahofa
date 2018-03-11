@@ -51,14 +51,14 @@ public:
     virtual void read_from_file(ifstream &input);
     void read_from_file(const char *input);
     void print(ostream &out = cout) const;
-    
+
     // setters, getters
     set<State> get_final_states() const { return final_states;}
     State get_initial_state() const { return initial_state;}
     set<State> get_states() const;
     unsigned long state_count() const { return transitions.size();}
 
-    bool is_state(State state) const 
+    bool is_state(State state) const
     {
         return transitions.find(state) != transitions.end();
     }
@@ -79,7 +79,7 @@ public:
     void remove_unreachable();
     std::set<State> breadth_first_search(
         set<State> actual = set<State>{}) const;
-    
+
     // essential
     void merge_states(const map<State,State> &mapping);
 
@@ -143,9 +143,9 @@ void FastNfa::parse_word(
     for (unsigned i = 0; i < length && !actual.empty(); i++)
     {
         set<State> next;
-        for (auto j : actual) 
+        for (auto j : actual)
         {
-            assert ((j << shift) + word[j] < trans_vector.size());
+            assert ((j << shift) + word[i] < trans_vector.size());
             auto trans = trans_vector[(j << shift) + word[i]];
 
             if (!trans.empty())
@@ -161,7 +161,7 @@ void FastNfa::parse_word(
         // call function to do something at the end of current iteration
         loop_handler();
         actual = move(next);
-    }   
+    }
 }
 
 inline bool FastNfa::accept(const Word word, unsigned length) const
@@ -184,7 +184,7 @@ inline bool FastNfa::accept(const Word word, unsigned length) const
             }
         }
         actual = move(next);
-    }   
+    }
 
     return false;
 }
