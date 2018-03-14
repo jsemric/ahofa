@@ -22,7 +22,7 @@
 #include <netinet/icmp6.h>
 #include <net/ethernet.h>
 
-/// Class PcapReader for reading and processing packets in packet caputure files.
+/// reading and processing packets in packet capture files.
 namespace pcapreader
 {
 
@@ -40,16 +40,12 @@ static inline const unsigned char *get_payload(
 
 
 template<typename F>
-pcap_t* process_payload(
-    const char* capturefile, F func, const char *filter = 0,
-    size_t count = ~0UL);
+pcap_t* process_payload(const char* capturefile, F func, size_t count = ~0UL);
 
-pcap_t* init_pcap(const char* capturefile, const char *filter = 0);
+pcap_t* init_pcap(const char* capturefile);
 
 template<typename F>
 pcap_t* process_payload(pcap_t *pcap, F func, unsigned long count = ~0UL);
-
-//std::mutex bpf_compile_mux;
 
 /// Generic function for processing packet payload.
 ///
@@ -57,35 +53,17 @@ pcap_t* process_payload(pcap_t *pcap, F func, unsigned long count = ~0UL);
 /// @param count Total number of processed packets, which includes some 
 /// payload data.
 template<typename F>
-pcap_t* process_payload(
-    const char* capturefile,
-    F func, const char *filter,
-    unsigned long count)
+pcap_t* process_payload(const char* capturefile, F func, unsigned long count)
 {
     char err_buf[4096] = "";
     pcap_t *pcap;
 
-    if (!(pcap = pcap_open_offline(capturefile, err_buf))) {
+    if (!(pcap = pcap_open_offline(capturefile, err_buf)))
+    {
         throw std::ios_base::failure(
             "cannot open pcap file '" + std::string(capturefile) + "'");
     }
 
-    struct bpf_program fp;
-    // this mutex is essential when multithreading
-    // otherwise very bad error would occur
-    /*
-    bpf_compile_mux.lock();
-    if (filter) {
-        if (pcap_compile(pcap, &fp, filter, 0, 0) == -1) {
-            bpf_compile_mux.unlock();
-            throw std::runtime_error("cannot parse filter");
-        }
-        if (pcap_setfilter(pcap, &fp) == -1) {
-            bpf_compile_mux.unlock();
-            throw std::runtime_error("cannot install filter");
-        }
-    }
-    bpf_compile_mux.unlock();*/
     return process_payload(pcap, func, count);
 }
 

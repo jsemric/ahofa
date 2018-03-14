@@ -12,7 +12,7 @@ EXE=$(SRCDIR)/exe
 CXXFLAGS=$(STD) -Wall -Wextra -pedantic  -I $(COMMON) -O3 #-Wfatal-errors #-DNDEBUG
 LIBS=-lpcap -lpthread -lboost_system -lboost_filesystem
 
-PROG=nfa_error lmin reduce
+PROG=nfa_error lmin reduce par_test
 all: $(PROG)
 
 SRC=$(wildcard $(COMMON)/*.cpp)
@@ -49,10 +49,10 @@ $(EXE)/traffic-stats.o: $(EXE)/traffic-stats.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
 # n-grams in traffic
-ngrams: $(EXE)/ngrams.o $(OBJ)
+par_test: $(EXE)/par_test.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
-$(EXE)/ngrams.o: $(EXE)/ngrams.cpp
+$(EXE)/par_test.o: $(EXE)/par_test.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
 # merging inspired by predicate logic

@@ -19,8 +19,6 @@
 using namespace reduction;
 using namespace std;
 
-//extern mutex pcapreader::bpf_compile_mux;
-
 const char *helpstr =
 "NFA reduction\n"
 "Usage: ./reduce [OPTIONS] NFA FILE\n"

@@ -189,6 +189,7 @@ float nfold_merge(
         cerr << "Reduced: " << new_sc / old_sc << endl;
         cerr << "State cnt: " << new_sc << endl;
         cerr << "-----\n";
+        
         if (SHOW)
         {
             display_heatmap(nfa2, freq);
