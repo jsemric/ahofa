@@ -20,8 +20,8 @@ using namespace std;
 
 Nfa::Nfa(const Nfa &nfa)
 {
-    initial_state = initial_state;
-    final_states = final_states;
+    initial_state = nfa.initial_state;
+    final_states = nfa.final_states;
     transitions = nfa.transitions;
 }
 
@@ -432,6 +432,10 @@ FastNfa::FastNfa(const Nfa &nfa) : Nfa{nfa}
     build();
 }
 
+FastNfa::FastNfa(const FastNfa &nfa) : FastNfa{static_cast<Nfa>(nfa)}
+{
+}
+
 void FastNfa::build()
 {
     // map states
@@ -482,4 +486,17 @@ vector<State> FastNfa::get_final_state_idx() const
         ret.push_back(state_map.at(i));
     }
     return ret;
+}
+
+void FastNfa::label_states(
+    vector<size_t> &state_freq, const unsigned char *payload,
+    unsigned len) const
+{
+    vector<bool> bm(state_count());
+    parse_word(payload, len, [&bm](State s){ bm[s] = 1; });
+    for (size_t i = 0; i < state_freq.size(); i++)
+    {
+        state_freq[i] += bm[i];
+    }
+    state_freq[get_initial_state_idx()]++;
 }

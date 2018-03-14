@@ -106,6 +106,7 @@ private:
 public:
     FastNfa() : Nfa{} {}
     FastNfa(const Nfa &nfa);
+    FastNfa(const FastNfa &nfa);
 
     ~FastNfa() {}
 
@@ -119,6 +120,10 @@ public:
     virtual void read_from_file(ifstream &input) override;
 
     void build();
+
+    void label_states(
+        vector<size_t> &state_freq, const unsigned char *payload,
+        unsigned len) const;
 
     template<typename FuncType1, typename FuncType2 = decltype(default_lambda)>
     void parse_word(

@@ -19,7 +19,6 @@
 
 #include "nfa.hpp"
 #include "pcap_reader.hpp"
-#include "reduction.hpp"
 
 using namespace reduction;
 using namespace std;
@@ -61,6 +60,8 @@ struct Data
         }
     }
 };
+
+//extern mutex pcapreader::bpf_compile_mux;
 
 const char *helpstr =
 "The program computes an error of an incorrect packet classification by an\n"

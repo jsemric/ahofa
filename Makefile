@@ -42,6 +42,12 @@ lmin: $(EXE)/lmin.o $(OBJ)
 $(EXE)/lmin.o: $(EXE)/lmin.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
+traffic-stats: $(EXE)/traffic-stats.o $(OBJ)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
+
+$(EXE)/traffic-stats.o: $(EXE)/traffic-stats.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
+
 # n-grams in traffic
 ngrams: $(EXE)/ngrams.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)

@@ -18,9 +18,11 @@ float prune(
     float pct = 0.2, float eps = -1);
 
 float merge_and_prune(
-    Nfa &nfa, const map<State, unsigned long> &state_freq, float pct);
+    Nfa &nfa, const map<State, unsigned long> &state_freq, float pct,
+    float threshold = 0.995);
 
-vector<set<State>> armc(
-    Nfa &nfa, const vector<set<size_t>> &state_freq);
+float nfold_merge(
+    FastNfa &nfa, const string &capturefile, float pct, float th = 0.995,
+    size_t count = 10000, size_t iterations = 100000);
 
 } // end of namespace

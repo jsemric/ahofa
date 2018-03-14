@@ -40,19 +40,24 @@ static inline const unsigned char *get_payload(
 
 
 template<typename F>
-void process_payload(
-    const char* capturefile,
-    F func, const char *filter = 0,
-    unsigned long count = ~0UL);
+pcap_t* process_payload(
+    const char* capturefile, F func, const char *filter = 0,
+    size_t count = ~0UL);
 
-std::mutex bpf_compile_mux;
+pcap_t* init_pcap(const char* capturefile, const char *filter = 0);
+
+template<typename F>
+pcap_t* process_payload(pcap_t *pcap, F func, unsigned long count = ~0UL);
+
+//std::mutex bpf_compile_mux;
 
 /// Generic function for processing packet payload.
 ///
 /// @tparam F lambda function which manipulates with packet payload
-/// @param count Total number of processed packets, which includes some payload data.
+/// @param count Total number of processed packets, which includes some 
+/// payload data.
 template<typename F>
-void process_payload(
+pcap_t* process_payload(
     const char* capturefile,
     F func, const char *filter,
     unsigned long count)
@@ -68,6 +73,7 @@ void process_payload(
     struct bpf_program fp;
     // this mutex is essential when multithreading
     // otherwise very bad error would occur
+    /*
     bpf_compile_mux.lock();
     if (filter) {
         if (pcap_compile(pcap, &fp, filter, 0, 0) == -1) {
@@ -79,11 +85,18 @@ void process_payload(
             throw std::runtime_error("cannot install filter");
         }
     }
-    bpf_compile_mux.unlock();
+    bpf_compile_mux.unlock();*/
+    return process_payload(pcap, func, count);
+}
+
+template<typename F>
+pcap_t* process_payload(pcap_t *pcap, F func, unsigned long count)
+{
     struct pcap_pkthdr *header;
     const unsigned char *packet, *payload;
 
-    while (pcap_next_ex(pcap, &header, &packet) == 1 && count) {
+    while (pcap_next_ex(pcap, &header, &packet) == 1 && count)
+    {
         payload = get_payload(packet, header);
         int len = header->caplen - (payload - packet);
         if (len > 0) {
@@ -92,7 +105,15 @@ void process_payload(
         }
     }
 
-    pcap_close(pcap);
+    if (count)
+    {
+        pcap_close(pcap);
+        return 0;
+    }
+    else
+    {
+        return pcap;
+    }
 }
 
 inline const unsigned char *get_payload(

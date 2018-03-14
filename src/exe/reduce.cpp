@@ -19,6 +19,8 @@
 using namespace reduction;
 using namespace std;
 
+//extern mutex pcapreader::bpf_compile_mux;
+
 const char *helpstr =
 "NFA reduction\n"
 "Usage: ./reduce [OPTIONS] NFA FILE\n"
@@ -26,22 +28,13 @@ const char *helpstr =
 "  -h            : show this help and exit\n"
 "  -o <FILE>     : specify output file or directory for -s option\n"
 "  -f            : compute packet frequency of NFA states\n"
-"  -t <TYPE>     : reduction type\n"
+"  -t <TYPE>     : reduction type {prune,merge,nfmerge}\n"
+"  -s <N>        : frequency threshold for merging, default 0.99\n"
+"  -c <N>        : number of packets in one iteration, default 10000\n"
+"  -i <N>        : number of iterations, default 10000\n"
 "  -p <N>        : reduction rate\n"
 "  -e <N>        : error rate\n";
 
-void label_states(
-     FastNfa &nfa, vector<size_t> &state_freq, const unsigned char *payload,
-     unsigned len)
-{
-    vector<bool> bm(nfa.state_count());
-    nfa.parse_word(payload, len, [&bm](State s){ bm[s] = 1; });
-    for (size_t i = 0; i < state_freq.size(); i++)
-    {
-        state_freq[i] += bm[i];
-    }
-    state_freq[nfa.get_initial_state_idx()]++;
-}
 
 map<State, unsigned long> read_state_labels(
     const Nfa &nfa, const string &fname)
@@ -89,7 +82,10 @@ int main(int argc, char **argv)
     // options
     bool freq_opt = false;
     float eps = -1;
-    float pct = -1;
+    float pct = 0.05;//-1;
+    float threshold = 0.99;
+    size_t count = 10000;
+    size_t iter = 10000;
     string outfile = "reduced-nfa.fa", pcap, red_type = "prune";
 
     int opt_cnt = 1;    // program name
@@ -101,7 +97,7 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        while ((c = getopt(argc, argv, "ho:fe:p:t:")) != -1) {
+        while ((c = getopt(argc, argv, "ho:fe:p:t:i:c:s:")) != -1) {
             opt_cnt++;
             switch (c) {
                 // general options
@@ -124,6 +120,19 @@ int main(int argc, char **argv)
                     opt_cnt++;
                     pct = stod(optarg);
                     check_float(pct);
+                    break;
+                case 's':
+                    opt_cnt++;
+                    threshold = stod(optarg);
+                    check_float(threshold);
+                    break;
+                case 'c':
+                    opt_cnt++;
+                    count = stoi(optarg);
+                    break;
+                case 'i':
+                    opt_cnt++;
+                    iter = stoi(optarg);
                     break;
                 case 't':
                     opt_cnt++;
@@ -153,7 +162,7 @@ int main(int argc, char **argv)
         {
             throw runtime_error("cannot open output file");
         }
-        
+
         if (freq_opt)
         {
             size_t total = 0;
@@ -164,7 +173,7 @@ int main(int argc, char **argv)
                 [&] (const unsigned char *payload, unsigned len)
                 {
                     total++;
-                    label_states(nfa,state_freq, payload, len);
+                    nfa.label_states(state_freq, payload, len);
                 });
             
             out << "# Total packets : " << total << endl;
@@ -177,23 +186,31 @@ int main(int argc, char **argv)
                     << state_depth[state_map[i]] << "\n";
             }
         }
-        else 
+        else
         {
-            auto labels = read_state_labels(nfa, pcap);
             auto old_sc = nfa.state_count();
             float error;
-            if (red_type == "prune")
+            if (red_type == "nfmerge")
             {
-                error = prune(nfa, labels, pct, eps);
-            }
-            else if (red_type == "merge")
-            {
-                error = merge_and_prune(nfa, labels, pct);
+                error = nfold_merge(nfa, pcap, pct, threshold, count, iter);
             }
             else
             {
-                throw runtime_error(
-                    "invalid reduction type: '" + red_type + "'");
+                auto labels = read_state_labels(nfa, pcap);
+            
+                if (red_type == "prune")
+                {
+                    error = prune(nfa, labels, pct, eps);
+                }
+                else if (red_type == "merge")
+                {
+                    error = merge_and_prune(nfa, labels, pct);
+                }
+                else
+                {
+                    throw runtime_error(
+                        "invalid reduction type: '" + red_type + "'");
+                }    
             }
 
             auto new_sc = nfa.state_count();
@@ -203,7 +220,7 @@ int main(int argc, char **argv)
             cerr << "Predicted error: " << error << endl;
             nfa.print(out);
         }
-        
+
         out.close();
     }
     catch (exception &e) {
