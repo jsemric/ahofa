@@ -33,38 +33,6 @@ const char *helpstr =
 "  -p <N>        : reduction rate\n"
 "  -e <N>        : error rate\n";
 
-
-map<State, unsigned long> read_state_labels(
-    const Nfa &nfa, const string &fname)
-{
-    map<State, unsigned long> ret;
-    ifstream in{fname};
-    if (!in.is_open()) {
-        throw runtime_error("error loading NFA");
-    }
-
-    string buf;
-    while (getline(in, buf)) {
-        // remove '#' comment
-        buf = buf.substr(0, buf.find("#"));
-        if (buf == "") {
-            continue;
-        }
-        istringstream iss(buf);
-        State s;
-        unsigned long l;
-        if (!(iss >> s >> l)) {
-            throw runtime_error("invalid state labels syntax");
-        }
-        if (!nfa.is_state(s)) {
-            throw runtime_error("invalid NFA state: " + to_string(s));
-        }
-        ret[s] = l;
-    }
-    in.close();
-    return ret;
-}
-
 void check_float(float x, float max_val = 1, float min_val = 0)
 {
     if (x > max_val || x < min_val) {

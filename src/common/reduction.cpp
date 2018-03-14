@@ -2,6 +2,7 @@
 /// 2018
 
 #include <iostream>
+#include <sstream>
 #include <algorithm>
 #include <fstream>
 #include <cassert>
@@ -18,6 +19,37 @@
 namespace reduction {
 
 using namespace std;
+
+map<State, unsigned long> read_state_labels(
+    const Nfa &nfa, const string &fname)
+{
+    map<State, unsigned long> ret;
+    ifstream in{fname};
+    if (!in.is_open()) {
+        throw runtime_error("error loading NFA");
+    }
+
+    string buf;
+    while (getline(in, buf)) {
+        // remove '#' comment
+        buf = buf.substr(0, buf.find("#"));
+        if (buf == "") {
+            continue;
+        }
+        istringstream iss(buf);
+        State s;
+        unsigned long l;
+        if (!(iss >> s >> l)) {
+            throw runtime_error("invalid state labels syntax");
+        }
+        if (!nfa.is_state(s)) {
+            throw runtime_error("invalid NFA state: " + to_string(s));
+        }
+        ret[s] = l;
+    }
+    in.close();
+    return ret;
+}
 
 float prepare_and_prune(
     Nfa &nfa, const map<State, unsigned long> &state_freq, size_t old_sc,

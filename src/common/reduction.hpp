@@ -25,4 +25,7 @@ float nfold_merge(
     FastNfa &nfa, const string &capturefile, float pct, float th = 0.995,
     size_t count = 10000, size_t iterations = 100000);
 
+map<State, unsigned long> read_state_labels(
+   const Nfa &nfa, const string &fname);
+
 } // end of namespace
