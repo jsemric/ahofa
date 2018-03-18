@@ -21,41 +21,6 @@ using namespace std;
 
 const unsigned NW = 2;
 
-template<typename T>
-ErrorStats reduce(const FastNfa &target, vector<string> test_data, T func)
-{
-    FastNfa reduced = target;
-    func(reduced);
-    NfaError err{target, reduced, test_data, NW};
-    err.start();
-    ErrorStats aggr(target.state_count(), reduced.state_count());
-
-    for (auto i : err.get_result())
-        aggr.aggregate(i.second);
-
-    return aggr;
-}
-
-map<State,size_t> compute_freq(const FastNfa &nfa, string pcap)
-{
-    vector<size_t> state_freq(nfa.state_count());
-
-    pcapreader::process_payload(
-        pcap.c_str(),
-        [&] (const unsigned char *payload, unsigned len)
-        {
-            nfa.label_states(state_freq, payload, len);
-        });
-    
-    auto state_map = nfa.get_reversed_state_map();
-    map<State,size_t> freq;
-
-    for (unsigned long i = 0; i < nfa.state_count(); i++)
-        freq[state_map[i]] = state_freq[i];
-
-    return freq;
-}
-
 int main()
 {
     FastNfa target;
@@ -65,40 +30,38 @@ int main()
     vector<string> test_data{
         "pcaps/geant2.pcap2","pcaps/week2.pcap","pcaps/meter4-1.pcap8"};
     float pct = 0.16;
+    vector<ErrorStats> results;
+    vector<pair<int,float>> pars;
 
-    auto freq = compute_freq(target, train_data);
-    // use merge and prune
-    auto res_merge = reduce(
-        target, test_data,
-        [&freq, pct](FastNfa &nfa)
-        {
-            merge_and_prune(nfa, freq, pct);
-        });
-
-    auto res_prune = reduce(
-        target, test_data,
-        [&freq, pct](FastNfa &nfa)
-        {
-            prune(nfa, freq, pct);
-        });
-
-    for (float threshold = 0.9; threshold < 1; threshold += 0.02)
+    for (int iter = 0; iter < 22; iter += 1)
+    
     {
         FastNfa reduced = target;
         // 4 thresholds
-        for (int count = 10000; count < 50000; count += 10000)
+        for (float threshold = 0.9; threshold < 1; threshold += 0.005)
         {
-            // 4 counts
-            for (int iter = 4; iter < 20; iter += 4)
+            // reduce
+            FastNfa reduced = target;
+            reduce(reduced, train_data, pct, threshold, iter);
+
+            // compute error
+            NfaError err{target, reduced, test_data, NW};
+            err.start();
+
+            // accumulate results
+            ErrorStats aggr(target.state_count(), reduced.state_count());
+            for (auto i : err.get_result())
             {
-                // 4 iterations
-                auto res = reduce(
-                    target, test_data,
-                    [&](FastNfa &nfa)
-                    {
-                        nfold_merge(
-                            nfa, train_data, pct, threshold, count, iter);
-                    });
+                aggr.aggregate(i.second);
+            }
+
+            results.push_back(aggr);
+            pars.push_back(pair<int,float>(iter,threshold));
+
+            // do not compute with different threshold for no iteration (prune)
+            if (iter == 0)
+            {
+                break;
             }
         }
     }

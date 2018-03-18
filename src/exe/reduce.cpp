@@ -3,12 +3,9 @@
 
 #include <iostream>
 #include <ostream>
-#include <sstream>
-#include <exception>
 #include <vector>
 #include <map>
 #include <csignal>
-#include <stdexcept>
 #include <ctype.h>
 #include <getopt.h>
 
@@ -25,13 +22,11 @@ const char *helpstr =
 "options:\n"
 "  -h            : show this help and exit\n"
 "  -o <FILE>     : specify output file or directory for -s option\n"
-"  -f            : compute packet frequency of NFA states\n"
-"  -t <TYPE>     : reduction type {prune,merge,nfmerge}\n"
-"  -s <N>        : frequency threshold for merging, default 0.99\n"
-"  -c <N>        : number of packets in one iteration, default 10000\n"
-"  -i <N>        : number of iterations, default 10000\n"
-"  -p <N>        : reduction rate\n"
-"  -e <N>        : error rate\n";
+"  -f            : don't reduce, but, compute packet frequency of NFA states\n"
+"  -s            : use precomputed frequencies instead of pcap\n"
+"  -t <N>        : frequency threshold for merging, default 0.995\n"
+"  -i <N>        : number of iterations, default 0, which means pruning\n"
+"  -r <N>        : reduction rate\n";
 
 void check_float(float x, float max_val = 1, float min_val = 0)
 {
@@ -47,23 +42,22 @@ int main(int argc, char **argv)
 {
     // options
     bool freq_opt = false;
-    float eps = -1;
-    float pct = 0.05;//-1;
+    float rratio = -1;
     float threshold = 0.99;
-    size_t count = 10000;
-    size_t iter = 10000;
-    string outfile = "reduced-nfa.fa", pcap, red_type = "prune";
+    size_t iter = 0;
+    string outfile = "reduced-nfa.fa", pcap;
+    bool pre = false;
 
     int opt_cnt = 1;    // program name
     int c;
-
+    
     try {
         if (argc < 2) {
             cerr << helpstr;
             return 1;
         }
 
-        while ((c = getopt(argc, argv, "ho:fe:p:t:i:c:s:")) != -1) {
+        while ((c = getopt(argc, argv, "ho:f:r:t:i:s")) != -1) {
             opt_cnt++;
             switch (c) {
                 // general options
@@ -77,32 +71,22 @@ int main(int argc, char **argv)
                 case 'f':
                     freq_opt = true;
                     break;
-                case 'e':
+                case 'r':
                     opt_cnt++;
-                    eps = stod(optarg);
-                    check_float(eps);
-                    break;
-                case 'p':
-                    opt_cnt++;
-                    pct = stod(optarg);
-                    check_float(pct);
+                    rratio = stod(optarg);
+                    check_float(rratio);
                     break;
                 case 's':
+                    pre = true;
+                    break;
+                case 't':
                     opt_cnt++;
                     threshold = stod(optarg);
                     check_float(threshold);
                     break;
-                case 'c':
-                    opt_cnt++;
-                    count = stoi(optarg);
-                    break;
                 case 'i':
                     opt_cnt++;
                     iter = stoi(optarg);
-                    break;
-                case 't':
-                    opt_cnt++;
-                    red_type = optarg;
                     break;
                 default:
                     return 1;
@@ -131,59 +115,21 @@ int main(int argc, char **argv)
 
         if (freq_opt)
         {
-            size_t total = 0;
-            vector<size_t> state_freq(nfa.state_count());
-
-            pcapreader::process_payload(
-                pcap.c_str(),
-                [&] (const unsigned char *payload, unsigned len)
-                {
-                    total++;
-                    nfa.label_states(state_freq, payload, len);
-                });
-            
-            out << "# Total packets : " << total << endl;
-
-            auto state_map = nfa.get_reversed_state_map();
-            auto state_depth = nfa.state_depth();
-            for (unsigned long i = 0; i < nfa.state_count(); i++)
+            auto freq = compute_freq(nfa, pcap);
+            for (auto i : freq)
             {
-                out << state_map[i] << " " << state_freq[i] << " "
-                    << state_depth[state_map[i]] << "\n";
+                out << i.first << " " << i.second << endl;
             }
         }
         else
         {
             auto old_sc = nfa.state_count();
-            float error;
-            if (red_type == "nfmerge")
-            {
-                error = nfold_merge(nfa, pcap, pct, threshold, count, iter);
-            }
-            else
-            {
-                auto labels = read_state_labels(nfa, pcap);
-            
-                if (red_type == "prune")
-                {
-                    error = prune(nfa, labels, pct, eps);
-                }
-                else if (red_type == "merge")
-                {
-                    error = merge_and_prune(nfa, labels, pct);
-                }
-                else
-                {
-                    throw runtime_error(
-                        "invalid reduction type: '" + red_type + "'");
-                }    
-            }
-
+            float error = reduce(nfa, pcap, rratio, threshold, iter, pre);
             auto new_sc = nfa.state_count();
 
             cerr << "Reduction: " << new_sc << "/" << old_sc
                 << " " << 100 * new_sc / old_sc << "%\n";
-            cerr << "Predicted error: " << error << endl;
+            cerr << "Packet Error: " << error << endl;
             nfa.print(out);
         }
 

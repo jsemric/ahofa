@@ -19,7 +19,9 @@ void sum_up(const vector<size_t> &v)
 {
 	mux.lock();
     for (size_t i = 0; i < plens.size(); i++)
+    {
         plens[i] += v[i];
+    }
 	mux.unlock();
 }
 
@@ -54,7 +56,9 @@ int main(int argc, char **argv)
             threads[i].join();
 
     for (size_t i = 0; i < plens.size(); i++)
+    {
         cout << i << " " << plens[i] << endl;
+    }
 
 	return 0;
 }

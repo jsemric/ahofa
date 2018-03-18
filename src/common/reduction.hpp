@@ -12,20 +12,15 @@
 namespace reduction {
 
 using namespace std;
-// propagate final states to theirs predecessors
-float prune(
-    Nfa &nfa, const map<State, unsigned long> &state_freq,
-    float pct = 0.2, float eps = -1);
 
-float merge_and_prune(
-    Nfa &nfa, const map<State, unsigned long> &state_freq, float pct,
-    float threshold = 0.995);
+map<State, unsigned long> compute_freq(
+    const FastNfa &nfa, string fname, size_t count = ~0ULL);
 
-float nfold_merge(
-    FastNfa &nfa, const string &capturefile, float pct, float th = 0.995,
-    size_t count = 10000, size_t iterations = 100000);
+map<State, unsigned long> compute_freq(
+    const FastNfa &nfa, pcap_t *pcap, size_t count = ~0ULL);
 
-map<State, unsigned long> read_state_labels(
-   const Nfa &nfa, const string &fname);
+float reduce(
+    FastNfa &nfa, const string &samples, float pct = -1, float th = 0.995,
+    size_t iterations = 0, bool pre = false);
 
 } // end of namespace
