@@ -19,7 +19,7 @@ map<State, unsigned long> compute_freq(
 map<State, unsigned long> compute_freq(
     const FastNfa &nfa, pcap_t *pcap, size_t count = ~0ULL);
 
-float reduce(
+pair<float,size_t> reduce(
     FastNfa &nfa, const string &samples, float pct = -1, float th = 0.995,
     size_t iterations = 0, bool pre = false);
 

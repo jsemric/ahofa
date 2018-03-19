@@ -242,12 +242,13 @@ void display_heatmap(const FastNfa &nfa, map<State,size_t> &freq)
     }
 }
 
-float reduce(
+pair<float,size_t> reduce(
     FastNfa &nfa, const string &samples, float pct, float th,
     size_t iterations, bool pre)
 {
     size_t old_cnt = nfa.state_count();
     size_t count = 0;
+    size_t merged = 0;
     map<State,size_t> state_freq;
 
     if (pre || iterations < 2)
@@ -257,7 +258,7 @@ float reduce(
         if (iterations > 0)
         {
             // just 1 merge
-            merge(nfa, state_freq, th);
+            merged = merge(nfa, state_freq, th);
         }
     }
     else
@@ -277,7 +278,7 @@ float reduce(
             { (void)payload; (void)len; count++; });
 
         count /= iterations;
-        assert(count > 1000);
+        //assert(count > 1000);
 
         while (iterations-- > 0)
         {
@@ -290,7 +291,7 @@ float reduce(
             #endif
             
             // compute % reduction in each turn
-            auto merged = merge(nfa, state_freq, th);
+            merged = merge(nfa, state_freq, th);
             nfa.build();
 
             #if 0
@@ -314,7 +315,8 @@ float reduce(
         }
     }
 
-    return prune(nfa, freq, pct);
+    float er = prune(nfa, freq, pct);
+    return pair<float,size_t>(er, merged);
 }
 
 }

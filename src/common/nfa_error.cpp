@@ -3,10 +3,7 @@
 #include <ostream>
 #include <exception>
 #include <vector>
-#include <map>
 #include <stdexcept>
-#include <mutex>
-#include <thread>
 #include <ctype.h>
 
 #include <boost/filesystem.hpp>
@@ -20,12 +17,10 @@ using namespace std;
 
 namespace fs = boost::filesystem;
 
-
 NfaError::NfaError(
     const FastNfa &a1, const FastNfa &a2, const vector<string> &pcaps,
-    unsigned nw, bool consistent)
-    : target{a1}, reduced{a2}, pcaps{pcaps}, stop_work{0}, nworkers{nw},
-    consistent{consistent}, mux{}
+    bool consistent)
+    : target{a1}, reduced{a2}, pcaps{pcaps}, consistent{consistent}
 {
 	for (auto i : pcaps)
 	{
@@ -39,55 +34,13 @@ NfaError::NfaError(
 		pcap_close(p);
 	}
 
-	if (nw <= 0 || nw >= thread::hardware_concurrency())
-    {
-        throw runtime_error(
-            "invalid number of cores \"" + to_string(nworkers) + "\"");
-    }
-
     fidx_target = target.get_final_state_idx();
     fidx_reduced = reduced.get_final_state_idx();
 }
 
-void NfaError::collect_data(string pcap, ErrorStats data)
+void NfaError::process_pcaps()
 {
-    mux.lock();
-    results[pcap] = data;
-    mux.unlock();
-}
-
-void NfaError::start()
-{
-    // divide work
-    vector<vector<string>> v(nworkers);
-    for (unsigned i = 0; i < pcaps.size(); i++)
-    {
-        v[i % nworkers].push_back(pcaps[i]);
-    }
-
-    vector<thread> threads;
-    for (unsigned i = 0; i < nworkers; i++)
-    {
-    	
-        threads.push_back(thread{
-        		[&v, this, i]()
-                {
-                    this->process_pcaps(v[i]);
-                }
-            });
-    }
-
-    for (unsigned i = 0; i < nworkers; i++)
-    {
-        if (threads[i].joinable()) {
-            threads[i].join();
-        }
-    }
-}
-
-void NfaError::process_pcaps(vector<string> &vp)
-{
-    for (auto p : vp) {
+    for (auto p : pcaps) {
     	ErrorStats stats(reduced.state_count(), target.state_count());
         try {
             // just checking how many packets are accepted
@@ -95,24 +48,9 @@ void NfaError::process_pcaps(vector<string> &vp)
                 p.c_str(),
                 [&] (const unsigned char *payload, unsigned len)
                 {
-                    if (stop_work) {
-                        // SIGINT caught in parent, sum up and exit
-                        throw StopWork();
-                    }
-                    stats.total++;
                     compute_error(stats, payload, len);
                 });
-
-            collect_data(p, stats);
-        }
-        catch (ios_base::failure &e) {
-            cerr << "\033[1;31mWARNING\033[0m " << e.what() << "\n";
-            // process other capture files, continue for loop
-        }
-        catch (StopWork &e) {
-            // SIGINT - stop the thread
-            collect_data(p, stats);
-            break;
+            results.push_back(pair<string,ErrorStats>(p,stats));
         }
         catch (exception &e) {
             // other error
@@ -128,7 +66,7 @@ void NfaError::compute_error(
     vector<bool> bm(reduced.state_count());
     reduced.parse_word(payload, plen, [&bm](State s){ bm[s] = 1; });
     int match1 = 0;
-
+    stats.total++;
     for (size_t i = 0; i < fidx_reduced.size(); i++)
     {
         size_t idx = fidx_reduced[i];

@@ -19,16 +19,16 @@
 using namespace reduction;
 using namespace std;
 
-const unsigned NW = 3;
+const unsigned NW = 1;
 
 int main()
 {
     FastNfa target;
     target.read_from_file("min-snort/backdoor.rules.fa");
 
-    string train_data = "pcaps/geant.pcap";
-    vector<string> test_data{
-        "pcaps/geant2.pcap2","pcaps/week2.pcap","pcaps/meter4-1.pcap8"};
+    string train_data = "pcaps/extrasmall.pcap";
+    vector<string> test_data{"pcaps/extrasmall.pcap"};
+        //"pcaps/geant2.pcap2","pcaps/week2.pcap","pcaps/meter4-1.pcap8"};
     float pct = 0.16;
     cout << "i" << " " << "th" << " " << "pe" << " " << "ce"
          << " " << "cls_ratio" << endl;
@@ -36,17 +36,17 @@ int main()
     {
         // 0-10 = 11 iterations
         FastNfa reduced = target;
-
         for (float threshold = 0.975; threshold < 1; threshold += 0.005)
         {
             // 0.975 - 0.995 = 5 thresholds
             // reduce
             FastNfa reduced = target;
+            //reduce(reduced, train_data, pct, threshold, iter);
             reduce(reduced, train_data, pct, threshold, iter);
             reduced.build();
             // compute error
-            NfaError err{target, reduced, test_data, NW};
-            err.start();
+            NfaError err{target, reduced, test_data};
+            err.process_pcaps();
 
             // accumulate results
             ErrorStats aggr(target.state_count(), reduced.state_count());

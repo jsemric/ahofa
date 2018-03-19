@@ -6,10 +6,11 @@
 #include <fstream>
 #include <vector>
 #include <map>
-#include <csignal>
 #include <stdexcept>
 #include <ctime>
 #include <chrono>
+#include <thread>
+#include <future>
 #include <ctype.h>
 #include <getopt.h>
 
@@ -22,8 +23,6 @@ using namespace reduction;
 using namespace std;
 
 namespace fs = boost::filesystem;
-
-NfaError *ne;
 
 const char *helpstr =
 "The program computes an error of an incorrect packet classification by an\n"
@@ -40,14 +39,6 @@ const char *helpstr =
 "                  Use only if not sure about over-approximation\n"
 "  -s            : store results to a separate file per each packet capture\n"
 "                  file\n";
-
-void sighandl(int signal)
-{
-    (void)signal;
-    cout << "\n";
-    ne->stop();
-}
-
 
 void write_error_stats(
     ostream &out, const ErrorStats &data, string pcap, const FastNfa &target, 
@@ -144,6 +135,25 @@ void write_error_stats(
     out << "}\n";
 }
 
+string generate_fname(string nfa_str, string outdir, string pcap)
+{
+    string base = outdir + "/" +
+       fs::basename(nfa_str) + "." +
+       fs::path(pcap).filename().string() + ".";
+    string res;
+    string hash = "00000";
+    int j = 0;
+    do {
+        hash[0] = '0' + (rand()%10);
+        hash[1] = '0' + (rand()%10);
+        hash[2] = '0' + (rand()%10);
+        hash[3] = '0' + (rand()%10);
+        hash[4] = '0' + (rand()%10);
+        res = base + hash + ".json";
+    } while (fs::exists(res) || j++ > 100000);
+    return res;
+}
+
 int main(int argc, char **argv)
 {
     chrono::steady_clock::time_point timepoint = chrono::steady_clock::now();
@@ -202,16 +212,26 @@ int main(int argc, char **argv)
             throw runtime_error("invalid positional arguments");
         }
 
+        if (nworkers <= 0 || nworkers >= thread::hardware_concurrency())
+        {
+            throw runtime_error(
+                "invalid number of cores \"" + to_string(nworkers) + "\"");
+        }
+
         ostream *output = &cout;
-        if (outfile != "") {
-            if (store_sep) {
+        if (outfile != "")
+        {
+            if (store_sep)
+            {
                 outdir = outfile;
-                if (!fs::is_directory(outdir)) {
+                if (!fs::is_directory(outdir))
+                {
                     throw runtime_error("invalid directory");
                 }
                 outfile = "";
             }
-            else {
+            else
+            {
                 output = new ofstream{outfile};
                 if (!static_cast<ofstream*>(output)->is_open()) {
                     throw runtime_error("cannot open output file");
@@ -231,35 +251,43 @@ int main(int argc, char **argv)
             pcaps.push_back(argv[i]);
         }
 
-        NfaError err{target, reduced, pcaps, nworkers, consistent};
-        ne = &err;
-        signal(SIGINT, sighandl);
-        err.start();
-        auto res = err.get_result();
+        // divide work
+        vector<vector<string>> v(nworkers);
+        for (unsigned i = 0; i < pcaps.size(); i++)
+        {
+            v[i % nworkers].push_back(pcaps[i]);
+        }
+
+        vector<pair<string,ErrorStats>> stats;
+        vector<future<vector<pair<string,ErrorStats>>>> threads;
+
+        for (unsigned i = 0; i < nworkers; i++)
+        {
+            threads.push_back(async(
+                    [&target, &reduced, &v, i, consistent]()
+                    {
+                        NfaError err{target, reduced, v[i], consistent};
+                        err.process_pcaps();
+                        return err.get_result();
+                    }
+                ));
+        }
+
+        for (unsigned i = 0; i < nworkers; i++)
+        {
+            auto r = threads[i].get();
+            stats.insert(stats.end(), r.begin(), r.end());
+        }
         
         if (store_sep)
         {
             to_json = 1;
-            for (auto i : res)
+            for (auto i : stats)
             {
                 auto pcap = i.first;
                 // generate output name for each result
-                string base = outdir + "/" +
-                  fs::basename(nfa_str1) + "." +
-                  fs::path(pcap).filename().string() + ".";
-                string res;
-                string hash = "00000";
-                int j = 0;
-                do {
-                    hash[0] = '0' + (rand()%10);
-                    hash[1] = '0' + (rand()%10);
-                    hash[2] = '0' + (rand()%10);
-                    hash[3] = '0' + (rand()%10);
-                    hash[4] = '0' + (rand()%10);
-                    res = base + hash + ".json";
-                } while (fs::exists(res) || j++ > 100000);
-
-                ofstream out{res};
+                string fname = generate_fname(nfa_str1, outdir, pcap);
+                ofstream out{fname};
                 if (out.is_open())
                 {
                     write_error_stats(
@@ -277,7 +305,7 @@ int main(int argc, char **argv)
         {
             // aggregate results
             ErrorStats aggr(target.state_count(), reduced.state_count());
-            for (auto i : res)
+            for (auto i : stats)
                 aggr.aggregate(i.second);
 
             write_error_stats(

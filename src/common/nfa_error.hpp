@@ -3,9 +3,7 @@
 #include <ostream>
 #include <exception>
 #include <vector>
-#include <map>
 #include <stdexcept>
-#include <mutex>
 
 #include "nfa.hpp"
 
@@ -56,29 +54,24 @@ private:
     const FastNfa &target;
     const FastNfa &reduced;
     vector<string> pcaps;
-    bool stop_work;
-    unsigned nworkers;
     bool consistent;
 
-    mutex mux;
+    //mutex mux;
     vector<size_t> fidx_reduced;
     vector<size_t> fidx_target;
-    map<string,ErrorStats> results;
+    vector<pair<string,ErrorStats>> results;
 
 public:
     NfaError(
         const FastNfa &a1, const FastNfa &a2, const vector<string> &pcaps,
-        unsigned nw = 1, bool consistent = false);
+        bool consistent = false);
 
-    void start();
-    void stop() {stop_work = true;}
-    map<string,ErrorStats> get_result() const { return results;}
+    vector<pair<string,ErrorStats>> get_result() const { return results;}
+    void process_pcaps();
 
 private:
     void compute_error(
         ErrorStats &stats, const unsigned char *payload, unsigned plen) const;
-    void process_pcaps(vector<string> &vp);
-    void collect_data(string pcap, ErrorStats data);
 };
 
 }
