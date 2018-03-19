@@ -215,7 +215,6 @@ int merge(
         }
         actual = move(next);
     }
-    //cerr << "Merged: "<< cnt_merged << endl;
     // just for verification
     for (auto i : to_merge) {
         if (mapping.find(i) != mapping.end()) {
@@ -257,7 +256,6 @@ float reduce(
                            compute_freq(nfa, samples);
         if (iterations > 0)
         {
-            cerr << "merging\n";
             // just 1 merge
             merge(nfa, state_freq, th);
         }
@@ -295,7 +293,7 @@ float reduce(
             auto merged = merge(nfa, state_freq, th);
             nfa.build();
 
-            #if 1
+            #if 0
             cerr << "Merged: " << merged << endl;
             cerr << "-----\n";
             #endif
