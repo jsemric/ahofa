@@ -26,12 +26,10 @@ int main()
     FastNfa target;
     target.read_from_file("min-snort/backdoor.rules.fa");
 
-    string train_data = "pcaps/geant.pcap";
-    vector<string> test_data{
+    string train_aggr = "pcaps/geant.pcap";
+    vector<string> test_aggr{
         "pcaps/geant2.pcap2","pcaps/week2.pcap","pcaps/meter4-1.pcap8"};
     float pct = 0.16;
-    vector<ErrorStats> results;
-    vector<pair<int,float>> pars;
 
     for (int iter = 0; iter < 22; iter += 1)
     
@@ -42,10 +40,10 @@ int main()
         {
             // reduce
             FastNfa reduced = target;
-            reduce(reduced, train_data, pct, threshold, iter);
+            reduce(reduced, train_aggr, pct, threshold, iter);
 
             // compute error
-            NfaError err{target, reduced, test_data, NW};
+            NfaError err{target, reduced, test_aggr, NW};
             err.start();
 
             // accumulate results
@@ -55,8 +53,15 @@ int main()
                 aggr.aggregate(i.second);
             }
 
-            results.push_back(aggr);
-            pars.push_back(pair<int,float>(iter,threshold));
+            size_t wrong_acceptances = aggr.accepted_reduced -
+                aggr.accepted_target;
+            float pe = wrong_acceptances * 1.0 / aggr.total;
+            float ce = aggr.wrongly_classified * 1.0 / aggr.total;
+            float cls_ratio = aggr.correctly_classified * 1.0 /
+                (aggr.correctly_classified + aggr.wrongly_classified);
+
+            cout << iter << " " << threshold << " " << pe << " " << ce
+                << " " << cls_ratio << endl;
 
             // do not compute with different threshold for no iteration (prune)
             if (iter == 0)
