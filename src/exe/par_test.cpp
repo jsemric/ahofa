@@ -19,14 +19,14 @@
 using namespace reduction;
 using namespace std;
 
-const unsigned NW = 1;
-
-int main()
+int main(int argc, char **argv)
 {
     FastNfa target;
-    target.read_from_file("min-snort/backdoor.rules.fa");
+    string fname = "min-snort/backdoor.rules.fa";
+    if (argc > 1) fname = argv[1];
+    target.read_from_file(fname.c_str());
 
-    #if 1
+    #if 0
     string train_data = "pcaps/gean.pcap";
     vector<string> test_data{
         "pcaps/geant2.pcap2","pcaps/week2.pcap","pcaps/meter4-1.pcap8"};
@@ -37,26 +37,23 @@ int main()
     float pct = 0.16;
     cout << "i" << " " << "th" << " " << "pe" << " " << "ce"
          << " " << "cls_ratio" << endl;
-    for (int iter = 0; iter < 11; iter += 1)    
+    for (int iter = 0; iter < 6; iter += 1)    
     {
         // 0-10 = 11 iterations
         size_t merged = 0;
         FastNfa reduced = target;
-        for (float threshold = 0.935; threshold < 1; threshold += 0.02)
+        for (float threshold = 0.995; threshold < 1; threshold += 0.02)
         {
             // reduce
             FastNfa reduced = target;
-            //reduce(reduced, train_data, pct, threshold, iter);
             auto ret = reduce(reduced, train_data, pct, threshold, iter);
             merged = ret.second;
             reduced.build();
             // compute error
-            NfaError err{target, reduced, test_data};
-            err.process_pcaps();
+            auto err = compute_error(target, reduced, test_data);
 
             // accumulate results
-            ErrorStats aggr(target.state_count(), reduced.state_count());
-            for (auto i : err.get_result())
+            for (auto i : err)
             {
                 aggr.aggregate(i.second);
             }
