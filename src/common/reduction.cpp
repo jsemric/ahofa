@@ -166,14 +166,16 @@ int merge(
     Nfa &nfa, const map<State, unsigned long> &state_freq, float threshold)
 {
     auto suc = nfa.succ();
-    auto depth = nfa.state_depth();
     map<State,State> mapping;
     auto rules = nfa.split_to_rules();
     int cnt_merged = 0;
     set<State> to_merge;
 
-    set<State> actual{nfa.get_initial_state()};
-    set<State> visited{nfa.get_initial_state()};
+    State init = nfa.get_initial_state();
+    set<State> actual = suc[init];
+    set<State> visited = suc[init];
+    actual.erase(init);
+    visited.insert(init);
 
     while (!actual.empty())
     {
@@ -189,9 +191,18 @@ int merge(
             {
                 if (visited.find(next_state) == visited.end())
                 {
+                    // too close to final state
+                    bool cond = 1;
+                    for (auto x : suc[next_state])
+                    {
+                        if (nfa.is_final(x))
+                        {
+                            cond = false;
+                            break;
+                        }
+                    }
                     float diff = 1.0 * state_freq.at(next_state) / freq;
-
-                    if (depth[state] > 2 && diff >= threshold)
+                    if (cond && diff >= threshold)
                     {
                         cnt_merged++;
                         if (mapping.find(state) != mapping.end())
@@ -216,7 +227,8 @@ int merge(
             throw runtime_error("FAILURE");
         }
     }
-    nfa.merge_states(mapping);
+    if (!mapping.empty())
+        nfa.merge_states(mapping);
     return cnt_merged;
 }
 
@@ -296,9 +308,12 @@ pair<float,size_t> reduce(
         }
     }
     // change the reduction ratio in order to adjust pruning
-    size_t new_cnt = nfa.state_count();
-    assert(old_cnt >= new_cnt);
-    pct -= pct - old_cnt * pct / new_cnt;
+    if (pct != -1)
+    {
+        size_t new_cnt = nfa.state_count();
+        assert(old_cnt >= new_cnt);
+        pct -= pct - old_cnt * pct / new_cnt;
+    }
 
     // adjust state frequencies, remove merged states
     map<State, size_t> freq;

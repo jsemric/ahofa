@@ -43,7 +43,7 @@ int main(int argc, char **argv)
     // options
     bool freq_opt = false;
     float rratio = -1;
-    float threshold = 0.99;
+    float threshold = 0.995;
     size_t iter = 0;
     string outfile = "reduced-nfa.fa", pcap;
     bool pre = false;
@@ -133,6 +133,7 @@ int main(int argc, char **argv)
             nfa.print(out);
         }
 
+        cerr << "Saved as: " << outfile << endl;
         out.close();
     }
     catch (exception &e) {
