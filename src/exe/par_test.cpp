@@ -26,7 +26,7 @@ int main(int argc, char **argv)
     if (argc > 1) fname = argv[1];
     target.read_from_file(fname.c_str());
 
-    #if 0
+    #if 1
     string train_data = "pcaps/gean.pcap";
     vector<string> test_data{
         "pcaps/geant2.pcap2","pcaps/week2.pcap","pcaps/meter4-1.pcap8"};
@@ -37,12 +37,12 @@ int main(int argc, char **argv)
     float pct = 0.16;
     cout << "i" << " " << "th" << " " << "pe" << " " << "ce"
          << " " << "cls_ratio" << endl;
-    for (int iter = 0; iter < 6; iter += 1)    
+    for (int iter = 0; iter < 11; iter += 1)    
     {
         // 0-10 = 11 iterations
         size_t merged = 0;
         FastNfa reduced = target;
-        for (float threshold = 0.995; threshold < 1; threshold += 0.02)
+        for (float threshold = 0.935; threshold < 1; threshold += 0.02)
         {
             // reduce
             FastNfa reduced = target;
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
             reduced.build();
             // compute error
             auto err = compute_error(target, reduced, test_data);
-
+            ErrorStats aggr(reduced.state_count(), target.state_count());
             // accumulate results
             for (auto i : err)
             {
