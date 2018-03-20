@@ -124,12 +124,12 @@ int main(int argc, char **argv)
         else
         {
             auto old_sc = nfa.state_count();
-            float error = reduce(nfa, pcap, rratio, threshold, iter, pre);
+            auto res = reduce(nfa, pcap, rratio, threshold, iter, pre);
             auto new_sc = nfa.state_count();
 
             cerr << "Reduction: " << new_sc << "/" << old_sc
                 << " " << 100 * new_sc / old_sc << "%\n";
-            cerr << "Packet Error: " << error << endl;
+            cerr << "Packet Error: " << res.first << endl;
             nfa.print(out);
         }
 

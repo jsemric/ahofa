@@ -55,10 +55,13 @@ int main(int argc, char **argv)
         if (threads[i].joinable())
             threads[i].join();
 
+    size_t total = 0;
     for (size_t i = 0; i < plens.size(); i++)
     {
-        cout << i << " " << plens[i] << endl;
+        total += plens[i];
+        //cout << i << " " << plens[i] << endl;
     }
+    cout << total << endl;
 
 	return 0;
 }

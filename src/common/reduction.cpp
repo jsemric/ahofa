@@ -189,24 +189,19 @@ int merge(
             {
                 if (visited.find(next_state) == visited.end())
                 {
-                    if (state_freq.at(next_state) > 0)
+                    float diff = 1.0 * state_freq.at(next_state) / freq;
+
+                    if (depth[state] > 2 && diff >= threshold)
                     {
-
-                        float diff = 1.0 * state_freq.at(next_state) / freq;
-
-                        if (depth[state] > 2 && diff >= threshold)
+                        cnt_merged++;
+                        if (mapping.find(state) != mapping.end())
                         {
-                            cnt_merged++;
-                            if (mapping.find(state) != mapping.end())
-                            {
-                                mapping[next_state] = mapping[state];
-                            }
-                            else
-                            {
-                                mapping[next_state] = state;   
-                            }
+                            mapping[next_state] = mapping[state];
                         }
-                        
+                        else
+                        {
+                            mapping[next_state] = state;   
+                        }
                     }
                     next.insert(next_state);
                     visited.insert(next_state);
@@ -291,7 +286,7 @@ pair<float,size_t> reduce(
             #endif
             
             // compute % reduction in each turn
-            merged = merge(nfa, state_freq, th);
+            merged += merge(nfa, state_freq, th);
             nfa.build();
 
             #if 0
