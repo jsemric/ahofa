@@ -60,11 +60,10 @@ vector<pair<string,ErrorStats>> compute_error(
                         }
                     }
 
-                    stats.accepted_reduced += match1 > 0;
-
+                    //stats. += match1 > 0;
+                    int match2 = 0;
                     if (match1 || consistent)
                     {    
-                        int match2 = 0;
                         // something was matched, lets find the difference
                         vector<bool> bm(target.state_count());
                         target.parse_word(
@@ -82,7 +81,8 @@ vector<pair<string,ErrorStats>> compute_error(
 
                         if (match1 != match2)
                         {
-                            stats.wrongly_classified++;
+                            stats.fp_c++;
+                            stats.all_c += match1 - match2;
                             if (consistent && match2 > match1)
                             {
                                 throw runtime_error(
@@ -92,13 +92,10 @@ vector<pair<string,ErrorStats>> compute_error(
                         }
                         else
                         {
-                            stats.correctly_classified++;
+                            stats.pp_c++;
                         }
-
-                        if (match2)
-                        {
-                            stats.accepted_target++;
-                        }
+                        // accepted packet false/positive positive
+                        if (match2) stats.pp_a++; else stats.fp_a++;
                     }
                 });
             results.push_back(pair<string,ErrorStats>(p,stats));

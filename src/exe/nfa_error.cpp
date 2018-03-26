@@ -31,125 +31,52 @@ const char *helpstr =
 "Usage: ./nfa_handler [OPTIONS] TARGET REDUCED ...\n"
 "options:\n"
 "  -h            : show this help and exit\n"
-"  -o <DIR>      : specify output directory for -s option, default is \n"
-"                  'data/error'\n"
+"  -o <FILE>     : specify output file\n"
 "  -n <NWORKERS> : number of workers to run in parallel\n"
 "  -c            : rigorous error computation, consistent but much slower,\n"
 "                  use only if not sure about over-approximation\n"
-"  -s            : store results (json) to a separate file per each packet\n"
-"                  capture file, if not specified output is printed to\n"
-"                  STDOUT in concise format.\n";
+"  -a            : aggregate statistics, otherwise output is in csv format\n"
+"  -d            : no csv header\n";
 
 void write_error_stats(
-    string fname, const ErrorStats &data, string pcap, const FastNfa &target, 
-    string target_str, const FastNfa &reduced, string reduced_str)
+    ostream &out, const vector<pair<string,ErrorStats>> &data,
+    string target_str, bool aggregate, bool header, size_t sc_t, size_t sc_r)
 {
-    size_t cls1 = 0, cls2 = 0;
-    for (auto i : data.reduced_states_arr)
+    float ratio = sc_r * 1.0 / sc_t;
+    if (aggregate)
     {
-        cls1 += i;
+        ErrorStats aggr(sc_t, sc_r);
+        for (auto i : data)
+            aggr.aggregate(i.second);
+
+        float pe = aggr.fp_a * 1.0 / aggr.total;
+        float ce = aggr.fp_c * 1.0 / aggr.total;
+        float cls_ratio = aggr.pp_c * 1.0 / (aggr.pp_c + aggr.fp_c);
+        out << "reduction : " << ratio << endl;
+        out << "total     : " << aggr.total << endl;
+        out << "pe        : " << pe << endl;
+        out << "ce        : " << ce << endl;
+        out << "+rate     : " << cls_ratio << endl;
     }
-    for (auto i : data.target_states_arr)
+    else
     {
-        cls2 += i;
-    }
-    size_t wrong_acceptances = data.accepted_reduced -
-        data.accepted_target;
-
-    float pe = wrong_acceptances * 1.0 / data.total;
-    float ce = data.wrongly_classified * 1.0 / data.total;
-    float cls_ratio = data.correctly_classified * 1.0 /
-        (data.correctly_classified + data.wrongly_classified);
-    unsigned long sc1 = target.state_count();
-    unsigned long sc2 = reduced.state_count();
-
-    if (fname == "") {
-        cout << "reduction : " << 1.0 * sc2 / sc1 << endl;
-        cout << "total     : " << data.total << endl;
-        cout << "pe        : " << pe << endl;
-        cout << "ce        : " << ce << endl;
-        cout << "+rate     : " << cls_ratio << endl;
-        return;
-    }
-
-    ofstream out{fname};
-    if (!out.is_open())
-        throw runtime_error("cannot open file\n");
-
-    out << "{\n";
-    out << "    \"target file\": \"" << target_str << "\",\n";
-    out << "    \"target\": \"" << fs::basename(target_str)
-        << "\",\n";
-    out << "    \"target states\": " << sc1 << ",\n";
-    out << "    \"reduced file\": \"" << reduced_str << "\",\n";
-    out << "    \"reduced\": \"" << fs::basename(reduced_str)
-        << "\",\n";
-    out << "    \"reduced states\": " << sc2 << ",\n";
-    out << "    \"reduction\": " << 1.0 * sc2 / sc1 << ",\n";
-    out << "    \"total packets\": " << data.total << ",\n";
-    out << "    \"accepted target\": " << data.accepted_target
-        << ",\n";
-    out << "    \"accepted reduced\": " << data.accepted_reduced
-        << ",\n";
-    out << "    \"reduced classifications\": " << cls1 << ",\n";
-    out << "    \"target classifications\": " << cls2 << ",\n";
-    out << "    \"wrong detections\": "
-        << data.wrongly_classified << ",\n";
-    out << "    \"correct detections\":"
-        << data.correctly_classified << ",\n";
- 
-    // concrete rules results
-    out << "    \"reduced rules\": {\n";
-
-    auto fidx = reduced.get_final_state_idx();
-    auto state_map = reduced.get_reversed_state_map();
-    for (size_t i = 0; i < fidx.size(); i++) {
-        State s = fidx[i];
-        out << "        \"q" << state_map[s]  << "\" : "
-            << data.reduced_states_arr[s];
-        if (i == fidx.size() - 1) {
-            out << "}";
+        if (header)
+        {
+            out << 
+                "target,states,states reduced,pcap,fp_a,pp_a,fp_c,pp_c,all_c"
+                << endl;
         }
-        out << ",\n";
-    }
 
-    fidx = target.get_final_state_idx();
-    state_map = target.get_reversed_state_map();
-    
-    out << "    \"target rules\": {\n";
-    for (size_t i = 0; i < fidx.size(); i++) {
-        State s = fidx[i];
-        out << "        \"q" << state_map[s]  << "\" : "
-            << data.reduced_states_arr[s];
-        if (i == fidx.size() - 1) {
-            out << "}";
+        for (auto i : data)
+        {
+            auto pcap = i.first;
+            auto d = i.second;
+            out << fs::basename(target_str) << "," << sc_t << "," << sc_r
+                << "," << fs::basename(pcap) + fs::extension(pcap) << ","
+                << d.fp_a << "," << d.pp_a << "," << d.fp_c << "," << d.pp_c
+                << "," << d.all_c << endl;
         }
-        out << ",\n";
     }
-
-    out << "    \"pcap\" : \"" << pcap << "\"\n";
-    out << "}\n";
-
-    out.close();
-}
-
-string generate_fname(string nfa_str, string outdir, string pcap)
-{
-    string base = outdir + "/" +
-       fs::basename(nfa_str) + "." +
-       fs::path(pcap).filename().string() + ".";
-    string res;
-    string hash = "00000";
-    int j = 0;
-    do {
-        hash[0] = '0' + (rand()%10);
-        hash[1] = '0' + (rand()%10);
-        hash[2] = '0' + (rand()%10);
-        hash[3] = '0' + (rand()%10);
-        hash[4] = '0' + (rand()%10);
-        res = base + hash + ".json";
-    } while (fs::exists(res) || j++ > 100000);
-    return res;
 }
 
 int main(int argc, char **argv)
@@ -157,11 +84,8 @@ int main(int argc, char **argv)
     chrono::steady_clock::time_point timepoint = chrono::steady_clock::now();
     string outfile;
     vector<string> pcaps;
-    // general program options
     unsigned nworkers = 1;
-    bool store_sep = false;
-    bool consistent = false;
-    string outdir = "data/prune-error";
+    bool consistent = false, aggregate = false, header = false;
 
     FastNfa target, reduced;
     string nfa_str1, nfa_str2;
@@ -170,12 +94,14 @@ int main(int argc, char **argv)
     int c;
 
     try {
-        if (argc < 2) {
+        if (argc < 2)
+        {
             cerr << helpstr;
             return 1;
         }
 
-        while ((c = getopt(argc, argv, "ho:n:cs")) != -1) {
+        while ((c = getopt(argc, argv, "ho:n:cad")) != -1)
+        {
             opt_cnt++;
             switch (c) {
                 // general options
@@ -193,8 +119,11 @@ int main(int argc, char **argv)
                 case 'c':
                     consistent = true;
                     break;
-                case 's':
-                    store_sep = true;
+                case 'a':
+                    aggregate = true;
+                    break;
+                case 'd':
+                    header = true;
                     break;
                 default:
                     return 1;
@@ -224,6 +153,14 @@ int main(int argc, char **argv)
             pcaps.push_back(argv[i]);
         }
 
+        ostream *output = &cout;
+        if (outfile != "")
+        {
+            output = new ofstream(outfile);
+            if (!static_cast<ofstream*>(output)->is_open())
+                throw runtime_error("cannot open output file");
+        }
+
         // divide work
         vector<vector<string>> v(nworkers);
         for (unsigned i = 0; i < pcaps.size(); i++)
@@ -248,35 +185,21 @@ int main(int argc, char **argv)
             stats.insert(stats.end(), r.begin(), r.end());
         }
 
-        if (store_sep)
-        {
-            cerr << "Output directory: " << outdir << endl;
-            for (auto i : stats)
-            {
-                auto pcap = i.first;
-                // generate output name for each result
-                string fname = generate_fname(nfa_str1, outdir, pcap);
-                write_error_stats(
-                    fname, i.second, i.first, target, nfa_str1, reduced,
-                    nfa_str2);
-            }
-        }
-        else
-        {
-            // aggregate results
-            ErrorStats aggr(reduced.state_count(), target.state_count());
-            for (auto i : stats)
-                aggr.aggregate(i.second);
+        write_error_stats(
+            *output, stats, nfa_str1, aggregate, header,
+            target.state_count(), reduced.state_count());
 
-            write_error_stats(
-                outfile, aggr, "", target, nfa_str1, reduced, nfa_str2);
+        unsigned msec = chrono::duration_cast<chrono::microseconds>(
+            chrono::steady_clock::now() - timepoint).count();
+        unsigned sec = msec / 1000 / 1000;
+        unsigned min = sec / 60;
+        cout << "duration  : " << min << "m/" << sec % 60 << "s/"
+            << msec % 1000 << "ms\"\n";
 
-            unsigned msec = chrono::duration_cast<chrono::microseconds>(
-                chrono::steady_clock::now() - timepoint).count();
-            unsigned sec = msec / 1000 / 1000;
-            unsigned min = sec / 60;
-            cout << "duration  : " << min << "m/" << sec % 60 << "s/"
-                << msec % 1000 << "ms\"\n";
+        if (outfile != "")
+        {
+            static_cast<ofstream*>(output)->close();
+            delete output;
         }
     }
     catch (exception &e) {

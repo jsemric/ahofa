@@ -17,8 +17,8 @@
 using namespace reduction;
 using namespace std;
 
-const int it_max = 10;
-const float th_inc = 0.02;
+const int it_max = 2;
+const float th_inc = 1.02;
 const float th_min = 0.935;
 
 struct ParamData
@@ -70,13 +70,10 @@ vector<ParamData> foo(
             {
                 aggr.aggregate(i.second);
             }
+            float pe = aggr.fp_a * 1.0 / aggr.total;
+            float ce = aggr.fp_c * 1.0 / aggr.total;
+            float cls_ratio = aggr.pp_c * 1.0 / (aggr.pp_c + aggr.fp_c);
 
-            size_t wrong_acceptances = aggr.accepted_reduced -
-                aggr.accepted_target;
-            float pe = wrong_acceptances * 1.0 / aggr.total;
-            float ce = aggr.wrongly_classified * 1.0 / aggr.total;
-            float cls_ratio = aggr.correctly_classified * 1.0 /
-                (aggr.correctly_classified + aggr.wrongly_classified);
             res.push_back(
                 ParamData(fname,pct,iter,threshold,pe,ce,cls_ratio,merged));
 
@@ -94,11 +91,10 @@ vector<ParamData> foo(
 int main()
 {
     vector<string> automata{
-        "min-snort/backdoor.rules.fa", "min-snort/sprobe.fa",
-        "min-snort/ex.web.rules"};
-    vector<float> pctv{0.16, 0.2, 0.24};
+        "min-snort/ftp.rules.fa"};//, "min-snort/imap.rules.fa"};
+    vector<float> pctv{0.05};
 
-    #if 1
+    #if 0
     string train_data = "pcaps/geant.pcap";
     vector<string> test_data{
         "pcaps/geant2.pcap2","pcaps/week2.pcap","pcaps/meter4-1.pcap8"};
