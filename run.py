@@ -5,15 +5,14 @@ import sys
 import subprocess as spc
 import numpy as np
 import glob
+import itertools
 
 # some constants
-NOR_DIR = 'snort'
 AUT_DIR = 'min-snort'
-FRQ_DIR = 'data/freq'
-ERR_DIR = 'data/error'
-RED_DIR = 'data/reduced'
+OUTCSV = 'experiments/error.csv'
+RED_DIR = 'experiments/reduced'
 ERROR = './nfa_error'
-PCAPS = 'pcaps/meter*'
+PCAPS = ['pcaps/meter*', 'pcaps/geant*', 'pcaps/week*']
 REDUCE = './reduce'
 NW = 2
 
@@ -24,58 +23,51 @@ def exist(fname):
 def call(prog):
     sys.stderr.write(prog + '\n')
     #return
-    spc.call(prog.split())
+    return spc.check_output(prog.split())
 
-PCAPS = ' '.join(f for f in glob.glob(PCAPS))
+tmp = ''
+for i in PCAPS:
+    tmp += ' ' + ' '.join(f for f in glob.glob(i))
+PCAPS = tmp
 NW = str(NW)
 
-#auts = ['ex.web.rules.fa','web-activex.rules.fa']
-auts=[]
-ratios = np.arange(0.10,0.32,0.02)
-freq_pcap = ['pcaps/geant.pcap']
+#auts = ['ftp.rules.fa','imap.rules.fa','web-activex.rules.fa']
+auts = ['dos.rules.fa','sprobe.fa','backdoor.rules.fa','web.php.rules.fa']
+#auts = ['l7-all.fa','ex.web.rules.fa']
+train_pcap = 'pcaps/geant.pcap'
+ratios = np.arange(0.10,0.32,0.15)
+iterations = range(0,2)
+
+results = []
 
 for a in auts:
-    spath = os.path.join(NOR_DIR, a)
-    apath = os.path.join(AUT_DIR, a)
-
-    # comment out if already minimized
-    call('./lmin {} {}'.format(spath, apath))
-
+    target = os.path.join(AUT_DIR, a)
     a = a.replace('.fa','')
-    pcap_name = ''
-    for x in freq_pcap:
-        pcap_name += os.path.basename(x.replace('.pcap',''))
 
-    freq = os.path.join(FRQ_DIR, a + '-' + pcap_name)
-
-    # comment out if frequency has been already computed
-    prog = '{} -f -o {} {} '.format(REDUCE, freq, apath) + ' '.join(freq_pcap)
-    call(prog)
-
-    for r in ratios:
+    for r, it in itertools.product(ratios, iterations):
         r = str(r)
-        # pruning
-        out1 = os.path.join(
-            RED_DIR, os.path.basename(freq) + '-prune-r' + r + '.fa')
+        it = str(it)
+        
+        # creating name for reduced nfa
+        reduced = os.path.join(
+            RED_DIR,
+            '{}.{}-r{}-i{}.fa'.format(a, os.path.basename(train_pcap), r, it))
 
+        # reduction
         prog = ' '.join(
-            [REDUCE, apath, freq, '-p', r, '-t prune', '-o', out1])
+            [REDUCE, target, train_pcap, '-r', r, '-i', it, '-o', reduced])
         call(prog)
 
-        # merging
-        out2 = os.path.join(
-            RED_DIR, os.path.basename(freq) + '-merge-r' + r + '.fa')
+        # error
+        prog = ' '.join([ERROR, target, reduced, '-n', NW, PCAPS])
+        o = call(prog)
+        o = o.decode("utf-8")
+        o = o.split('\n')[:-1]
+        # add iteration parameter as information to csv
+        o = [x + ',' + it for x in o]
+        results += o
 
-        prog = ' '.join(
-            [REDUCE, apath, freq, '-p', r, '-t merge', '-o', out2])
-        call(prog)
-
-        # error pruning
-        prog = ' '.join(
-            [ERROR, apath, out1, '-j -s', '-n', NW, '-o', ERR_DIR, PCAPS])
-        call(prog)
-
-        # error merging
-        prog = ' '.join(
-            [ERROR, apath, out2, '-j -s', '-n', NW, '-o', ERR_DIR, PCAPS])
-        call(prog)
+with open(OUTCSV,'a') as f:
+    #print("nfa,states,states reduced,pcap,fp_a,pp_a,fp_c,pp_c,all_c,it")
+    for i in results:
+        f.write(i + '\n')

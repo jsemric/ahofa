@@ -39,7 +39,8 @@ struct ErrorStats
         if (d.reduced_states_arr.size() != reduced_states_arr.size() ||
             d.target_states_arr.size() != target_states_arr.size())
         {
-            throw runtime_error("different array size, cannot aggregate");
+            throw runtime_error(
+                "ErrorStats.aggregate: different array size");
         }
 
         total += d.total;

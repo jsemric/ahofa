@@ -36,7 +36,7 @@ const char *helpstr =
 "  -c            : rigorous error computation, consistent but much slower,\n"
 "                  use only if not sure about over-approximation\n"
 "  -a            : aggregate statistics, otherwise output is in csv format\n"
-"  -d            : no csv header\n";
+"  -d            : add csv header\n";
 
 void write_error_stats(
     ostream &out, const vector<pair<string,ErrorStats>> &data,
@@ -45,13 +45,15 @@ void write_error_stats(
     float ratio = sc_r * 1.0 / sc_t;
     if (aggregate)
     {
-        ErrorStats aggr(sc_t, sc_r);
+        ErrorStats aggr(sc_r, sc_t);
         for (auto i : data)
             aggr.aggregate(i.second);
 
         float pe = aggr.fp_a * 1.0 / aggr.total;
         float ce = aggr.fp_c * 1.0 / aggr.total;
         float cls_ratio = aggr.pp_c * 1.0 / (aggr.pp_c + aggr.fp_c);
+        assert(cls_ratio >= 0 && cls_ratio <= 1);
+        assert(pe >= 0 && pe <= ce && ce <= 1);
         out << "reduction : " << ratio << endl;
         out << "total     : " << aggr.total << endl;
         out << "pe        : " << pe << endl;
