@@ -135,11 +135,8 @@ int main(int argc, char **argv)
             throw runtime_error("invalid positional arguments");
         }
 
-        if (nworkers <= 0 || nworkers >= thread::hardware_concurrency())
-        {
-            throw runtime_error(
-                "invalid number of cores \"" + to_string(nworkers) + "\"");
-        }
+        nworkers = min(nworkers, thread::hardware_concurrency());
+        assert(nworkers > 0);
 
         // get automata
         nfa_str1 = argv[opt_cnt];

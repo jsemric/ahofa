@@ -253,6 +253,9 @@ pair<float,size_t> reduce(
     FastNfa &nfa, const string &samples, float pct, float th,
     size_t iterations, bool pre)
 {
+    assert((pct > 0 && pct <= 1) || pct == -1);
+    assert(th <= 1 && th >= 0.25);
+
     size_t old_cnt = nfa.state_count();
     size_t count = 0;
     size_t merged = 0;
@@ -285,7 +288,7 @@ pair<float,size_t> reduce(
             { (void)payload; (void)len; count++; });
 
         count /= iterations;
-        //assert(count > 1000);
+        assert(count > 100);
 
         while (iterations-- > 0)
         {
