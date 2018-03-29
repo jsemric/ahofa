@@ -204,6 +204,10 @@ int merge(
                     float diff = 1.0 * state_freq.at(next_state) / freq;
                     if (cond && diff >= threshold)
                     {
+                        // state is merged if:
+                        //  1.) is not a final state
+                        //  2.) is not too close to a final state
+                        //  3.) difference between frequencies is low
                         cnt_merged++;
                         if (mapping.find(state) != mapping.end())
                         {

@@ -90,12 +90,20 @@ vector<pair<string,ErrorStats>> compute_error(
                                     "over-approximation!\n");
                             }
                         }
-                        else
+                        else if (match1)
                         {
                             stats.pp_c++;
                         }
                         // accepted packet false/positive positive
-                        if (match2) stats.pp_a++; else stats.fp_a++;
+                        if (consistent) {
+                            if (match1 && match2)
+                                stats.pp_a++;
+                            else if (match1 && !match2)
+                                stats.fp_a++;
+                        }
+                        else {
+                            if (match2) stats.pp_a++; else stats.fp_a++;
+                        }
                     }
                 });
             results.push_back(pair<string,ErrorStats>(p,stats));

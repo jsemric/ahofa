@@ -40,7 +40,8 @@ const char *helpstr =
 
 void write_error_stats(
     ostream &out, const vector<pair<string,ErrorStats>> &data,
-    string target_str, bool aggregate, bool header, size_t sc_t, size_t sc_r)
+    string target_str, string reduced_str, bool aggregate, bool header,
+    size_t sc_t, size_t sc_r)
 {
     float ratio = sc_r * 1.0 / sc_t;
     if (aggregate)
@@ -64,8 +65,7 @@ void write_error_stats(
     {
         if (header)
         {
-            out << 
-                "target,states,states reduced,pcap,fp_a,pp_a,fp_c,pp_c,all_c"
+            out << "target,reduced,pcap,total,fp_a,pp_a,fp_c,pp_c,all_c"
                 << endl;
         }
 
@@ -73,10 +73,10 @@ void write_error_stats(
         {
             auto pcap = i.first;
             auto d = i.second;
-            out << fs::basename(target_str) << "," << sc_t << "," << sc_r
+            out << fs::basename(target_str) << "," << fs::basename(reduced_str)
                 << "," << fs::basename(pcap) + fs::extension(pcap) << ","
-                << d.fp_a << "," << d.pp_a << "," << d.fp_c << "," << d.pp_c
-                << "," << d.all_c << endl;
+                << d.total << "," <<  d.fp_a << "," << d.pp_a << "," << d.fp_c
+                << "," << d.pp_c << "," << d.all_c << endl;
         }
     }
 }
@@ -185,14 +185,14 @@ int main(int argc, char **argv)
         }
 
         write_error_stats(
-            *output, stats, nfa_str1, aggregate, header,
+            *output, stats, nfa_str1, nfa_str2, aggregate, header,
             target.state_count(), reduced.state_count());
 
         unsigned msec = chrono::duration_cast<chrono::microseconds>(
             chrono::steady_clock::now() - timepoint).count();
         unsigned sec = msec / 1000 / 1000;
         unsigned min = sec / 60;
-        cout << "duration  : " << min << "m/" << sec % 60 << "s/"
+        cerr << "duration  : " << min << "m/" << sec % 60 << "s/"
             << msec % 1000 << "ms\"\n";
 
         if (outfile != "")
