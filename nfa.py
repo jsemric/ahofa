@@ -48,6 +48,27 @@ class Nfa:
     regex_trans_ba = re.compile('^\w+,\s*\[\w+\]->\s*\[\w+\]$')
     regex_state_ba = re.compile('^\[\w+\]$')
 
+    @classmethod
+    def nfa_size(cls, fname):
+        with open(fname, 'r') as f:
+            for line in f: break
+            trans = 0
+            fstates = 0
+            states = set()
+            for line in f:
+                x = line.split(' ')
+                if len(x) == 1:
+                    fstates += 1
+                    break
+                states.add(x[0])
+                states.add(x[1])
+                trans += 1
+
+            for line in f:
+                fstates += 1
+
+        return (fname, str(len(states)), str(fstates), trans)
+
     def __init__(self):
         self._transitions = dict(defaultdict(set))
         self._initial_state = None
