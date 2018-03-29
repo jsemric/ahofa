@@ -6,13 +6,19 @@ import subprocess as spc
 import numpy as np
 import glob
 import itertools
+import multiprocessing
+
 from nfa import Nfa
 
 cnt = 0
 
-def exist(fname):
-    if not os.path.exists(fname):
-        raise RuntimeError('file not found: ' + fname )
+def check_file(fname, dir=False):
+    if dir == True:
+        if not os.path.isdir(fname):
+            raise RuntimeError('folder not found: ' + fname)
+    else:
+        if not os.path.isfile(fname):
+            raise RuntimeError('file not found: ' + fname)
 
 def call(prog):
     global cnt
@@ -47,12 +53,19 @@ def main():
         set([item for sub in TEST_PCAP for item in glob.glob(sub)]))
     train_data = TRAIN_PCAP
 
+    # check parameters
     assert type(train_data) == type(str())
     assert len(test_data) >= 1
+    assert 1 <= NW <= multiprocessing.cpu_count()
+    for i in test_data.split(): check_file(i)
+    for i in [train_data, ERROR, REDUCE]: check_file(i)
+    for i in [RED_DIR, AUT_DIR]: check_file(i, True)
+    for i in AUTOMATA: assert os.path.exists(os.path.join(AUT_DIR, i))
 
     nw = str(NW)
     ratios = np.arange(0.10,0.32,0.15)
     iterations = range(0,2)
+
     results_error = []
     results_reduction = []
 
