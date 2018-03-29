@@ -9,7 +9,6 @@
 #include <unistd.h>
 
 #include "pcap_reader.hpp"
-#include "aux.hpp"
 #include "nfa.hpp"
 #include "reduction.hpp"
 

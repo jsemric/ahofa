@@ -14,11 +14,20 @@
 #include <stdio.h>
 #include <ctype.h>
 
-#include "aux.hpp"
-
 namespace reduction {
 
 using namespace std;
+
+template <typename T1, typename T2, typename T3>
+struct Triple
+{
+    T1 first;
+    T2 second;
+    T3 third;
+
+    Triple() = default;
+    Triple(T1 t1, T2 t2, T3 t3) : first{t1}, second{t2}, third{t3} {};
+};
 
 // transitions serialization format
 using TransFormat = Triple<string, string, string>;

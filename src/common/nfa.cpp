@@ -8,11 +8,38 @@
 #include <cassert>
 #include <map>
 
-#include "aux.hpp"
 #include "nfa.hpp"
 
 using namespace reduction;
 using namespace std;
+
+static int hex_to_int(const string &str)
+{
+    int x = 0;
+    int m = 1;
+    for (int i = str.length()-1; i > 1; i--) {
+        int c = tolower(str[i]);
+        x += m * (c - (c > '9' ? 'a' - 10 : '0'));
+        m *= 16;
+    }
+
+    return x;
+}
+
+static string int_to_hex(const unsigned num)
+{
+    assert (num <= 255);
+    char buf[16] = "";
+    sprintf(buf, "0x%.2x", num);
+    return buf;
+}
+
+template<typename T>
+static void set_union(set<T> &s1, const set<T> &s2) {
+    for (auto i : s2) {
+        s1.insert(i);
+    }
+}
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // implementation of Nfa class methods
