@@ -1,18 +1,9 @@
 #!/usr/bin/env python3
 # Jakub Semric 2018
 
-import sys
-import os
 import argparse
 import subprocess
-import tempfile
-import re
-import datetime
-import glob
-import random
 import math
-import numpy as np
-from collections import defaultdict
 
 from nfa import Nfa
 
@@ -51,7 +42,6 @@ def main():
 
     args = parser.parse_args()
 
-    # TODO
     aut = Nfa.parse(args.input)
 
     freq = None
