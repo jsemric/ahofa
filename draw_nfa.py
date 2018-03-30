@@ -36,7 +36,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '-o','--output', type=str, metavar='FILE', default="automaton.dot",
+        '-o','--output', type=str, metavar='FILE', default="example.dot",
         help='output file')
 
     parser.add_argument('input', metavar='NFA', type=str)
@@ -46,24 +46,32 @@ def main():
         help='show transition labels')
     parser.add_argument(
         '-r', '--rules', type=int, help='number of rules to show')
+    parser.add_argument(
+        '-d', '--depth', type=int, help='maximal depth of a state to display')
 
     args = parser.parse_args()
 
     # TODO
     aut = Nfa.parse(args.input)
 
+    freq = None
     if args.freq:
         freq = get_freq(args.freq)
-        
-        gen = aut.write_dot(
-            show_trans=args.trans, freq=freq,
-            #states=set(s for s,f in _freq.items() if f > 10),
-            #rules=10,
-            freq_scale=lambda x: math.log(x + 2), show_diff=0)
-    else:
-        gen = aut.write_dot()
 
-    write_output(args.output, gen)
+    states = set(aut.states)
+    if args.rules:
+        rules = list(aut.split_to_rules().values())[0:args.rules]
+        states = set([s for subl in rules for s in subl])
+
+    if args.depth:
+        depth = aut.state_depth
+        states = set(filter(lambda x: depth[x] < args.depth, states))
+
+    out = aut.write_dot(
+        show_trans=args.trans, freq=freq, states=states,
+        freq_scale=lambda x: math.log(x + 2), show_diff=0)
+
+    write_output(args.output, out)
     image = args.output.split('.dot')[0] + '.jpg'
     prog = 'dot -Tjpg ' + args.output + ' -o ' + image
     subprocess.call(prog.split())

@@ -21,9 +21,9 @@ const char *helpstr =
 "Usage: ./reduce [OPTIONS] NFA FILE\n"
 "options:\n"
 "  -h            : show this help and exit\n"
-"  -o <FILE>     : specify output file or directory for -s option\n"
+"  -o <FILE>     : specify output file\n"
 "  -f            : don't reduce, but, compute packet frequency of NFA states\n"
-"  -s            : use precomputed frequencies instead of pcap\n"
+"  -s            : use file with state frequencies instead of pcap\n"
 "  -t <N>        : frequency threshold for merging, default 0.995\n"
 "  -i <N>        : number of iterations, default 0, which means pruning\n"
 "  -r <N>        : reduction rate\n";
@@ -57,7 +57,7 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        while ((c = getopt(argc, argv, "ho:f:r:t:i:s")) != -1) {
+        while ((c = getopt(argc, argv, "ho:fr:t:i:s")) != -1) {
             opt_cnt++;
             switch (c) {
                 // general options
@@ -99,7 +99,7 @@ int main(int argc, char **argv)
             throw runtime_error("invalid positional arguments");
         }
 
-        // get automata
+        // get automaton
         string nfa_str = argv[opt_cnt];
         string pcap = argv[opt_cnt + 1];
 

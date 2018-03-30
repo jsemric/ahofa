@@ -41,7 +41,7 @@ def main():
     # executables
     ERROR = './nfa_error'
     REDUCE = './reduce'
-    TEST_PCAP = ['pcaps/meter*', 'pcaps/geant*', 'pcaps/week*'] 
+    TEST_PCAP = ['pcaps/meter*', 'pcaps/geant*', 'pcaps/week*']
     TRAIN_PCAP = 'pcaps/geant.pcap'
     # number of workers to run in parallel
     NW = 2
@@ -59,7 +59,7 @@ def main():
     for i in test_data.split(): check_file(i)
     for i in [train_data, ERROR, REDUCE]: check_file(i)
     for i in [RED_DIR, AUT_DIR]: check_file(i, True)
-    for i in AUTOMATA: assert os.path.exists(os.path.join(AUT_DIR, i))
+    for i in AUTOMATA: check_file(os.path.join(AUT_DIR, i))
 
     nw = str(NW)
     ratios = np.arange(0.10,0.32,0.15)
@@ -76,7 +76,7 @@ def main():
         for r, it in itertools.product(ratios, iterations):
             r = str(r)
             it = str(it)
-            
+
             # creating name for reduced nfa
             idx = 0
             while True:
@@ -95,7 +95,7 @@ def main():
             # target,reduced,pcap,ratio,iter,Tstates,Ttransitions,Rstates,
             # Rtransitions
             o = ','.join([str(x) for x in [
-                target, reduced, train_data, r, it, Tstates, Ttransitions, 
+                target, reduced, train_data, r, it, Tstates, Ttransitions,
                 Rstates, Rtransitions]])
             results_reduction.append(o)
 
