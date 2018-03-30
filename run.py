@@ -31,7 +31,7 @@ def call(prog):
 def main():
     # some constants related to filenames
     # automata directory
-    AUT_DIR = 'min-snort'
+    AUT_DIR = 'automata'
     # file where information about error will be stored
     ERR_CSV = 'experiments/error.csv'
     # file where information about reduction will be written
@@ -41,9 +41,8 @@ def main():
     # executables
     ERROR = './nfa_error'
     REDUCE = './reduce'
-    # ['pcaps/meter*', 'pcaps/geant*', 'pcaps/week*']s
-    TEST_PCAP = ['pcaps/extrasmall.pcap'] 
-    TRAIN_PCAP = 'pcaps/extrasmall.pcap'
+    TEST_PCAP = ['pcaps/meter*', 'pcaps/geant*', 'pcaps/week*'] 
+    TRAIN_PCAP = 'pcaps/geant.pcap'
     # number of workers to run in parallel
     NW = 2
     # NFA to reduce
@@ -85,7 +84,7 @@ def main():
                 reduced = os.path.join(RED_DIR, aut + '.' + h + '.fa')
                 if not os.path.exists(reduced): break
                 idx += 1
-            print(reduced)
+
             # reduction
             prog = ' '.join(
                 [REDUCE, target, train_data, '-r', r, '-i', it, '-o', reduced])
