@@ -215,7 +215,24 @@ class Nfa:
         # remove old final states
         del self._transitions[final_state]
 
+    def split_to_rules(self):
+        res = dict()
+        pred = self.pred
+        for f in self._final_states:
+            actual = set([f])
+            visited = set()
+            while actual:
+                visited |= actual
+                new = set()
+                for q in actual:
+                    new = new.union(pred[q])
+                actual = new - visited
+            res[f] = visited.copy()
 
+        return res
+
+
+    '''
     def split_to_rules(self):
         succ = self.succ
         pred = self.pred
@@ -253,6 +270,7 @@ class Nfa:
             rules_all[state] = rule
 
         return rules_all
+    '''
 
     def neigh_count(self, selfloops=False):
         dc = {}
@@ -263,7 +281,6 @@ class Nfa:
             dc[state] = len(suc)
 
         return dc
-
 
     def remove_states(self, to_remove):
         if self._initial_state in to_remove:
@@ -297,39 +314,6 @@ class Nfa:
             actual = new - reached
 
         self.remove_states(set([s for s in self.states if s not in reached]))
-
-    def merge_states(self, mapping, *, merge_finals=False, clear_finals=True):
-        trans = self._transitions
-        finals = self._final_states
-        # redirect transitions from removed states
-        # merge i.first to i.second
-        for merged, src in mapping.items():
-            # senseless merging state to itself
-            if merged == src:
-                continue
-            if merge_finals:
-                if merged in finals:
-                    raise NfaError(
-                        'cannot merge the final state: ' + str(merged))
-                else:
-                    finals.add(src)
-
-            if not (clear_finals and src in finals):
-                for symbol, states in trans[merged].items():
-                    trans[src][symbol] |= states
-            del trans[merged]
-
-        # redirect transitions that led to removed states
-        for state, rules in trans.items():
-            for symbol, states in rules.items():
-                for state in states.copy():
-                    if state in mapping:
-                        states.discard(state)
-                        states.add(mapping[state])
-
-        if not clear_finals:
-            self.clear_final_state_selfloop()
-        assert len(set(self._transitions.keys()) & set(mapping.keys())) == 0
 
     def rename_states(self, mapping):
         trans = self._transitions
@@ -434,22 +418,12 @@ class Nfa:
 
     def write_dot(
         self, *, show_trans=False, freq=None, states=None, show_diff=False,
-        freq_scale=None, rules=None):
+        freq_scale=None):
 
         succ = self.succ
 
         if states == None:
             states = set(self.states)
-
-        if rules != None:
-            r = self.split_to_rules()
-            states = set([self._initial_state, self.generator])
-            cnt = 0
-            for s in r.values():
-                states |= s
-                cnt += 1
-                if cnt >= rules: 
-                    break
 
         yield 'digraph NFA {\n \
         rankdir=LR;size="8,5"\n \
