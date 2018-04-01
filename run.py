@@ -92,11 +92,12 @@ def main():
 
             _, Rstates, _, Rtransitions = Nfa.nfa_size(reduced)
 
-            # target,reduced,pcap,ratio,iter,Tstates,Ttransitions,Rstates,
+            # reduced,pcap,ratio,iter,Tstates,Ttransitions,Rstates,
             # Rtransitions
+            cname = os.path.basename(reduced.replace('.fa',''))
             o = ','.join([str(x) for x in [
-                target, reduced, train_data, r, it, Tstates, Ttransitions,
-                Rstates, Rtransitions]])
+                cname, os.path.basename(train_data), r, it, Tstates,
+                Ttransitions, Rstates, Rtransitions]])
             results_reduction.append(o)
 
             # error
