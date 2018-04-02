@@ -25,12 +25,28 @@ def main():
     comb['reduced'] = comb['reduced'].apply(lambda x: re.sub('\..*$','',x))
     comb = comb.set_index(['reduced','ratio','iter'])
 
-    comb = comb.unstack(level=[0,2])
-
+    # plot backdoor
+    bd = comb.unstack(level=[0,2])
     plt.style.use('ggplot')
-    comb['ce','backdoor'].plot()
-    comb['ppr','backdoor'].plot()
-    plt.show()
+    
+    ax = bd['ce','backdoor'].plot(title='backdoor.rules ppr',marker='o')
+    ax.set_ylabel('classification error')
+    ax.get_figure().savefig('backdoor-ce.png')
+    #plt.show()
+
+    ax = bd['ppr','backdoor'].plot(title='backdoor.rules ppr',marker='o')
+    ax.set_ylabel('positive positive rate')
+    ax.get_figure().savefig('backdoor-ppr.png')
+    #plt.show()
+
+    # plot sprobe
+    comb = comb.loc[(['sprobe'], slice(None), [0])]
+    comb = comb.unstack(level=[0,2])
+    comb.columns = ['ce','ppr']
+
+    ax = comb.plot(title='sprobe pruning',marker='o')
+    #plt.show()
+    ax.get_figure().savefig('sprobe-pruning.png')
     print(comb)
 
 
