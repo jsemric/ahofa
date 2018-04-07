@@ -198,22 +198,20 @@ class Nfa:
         self._final_states = new_finals
         return mapping
 
-    def retrieve_final_states(self, mapping=None):
+    def retrieve_final_states(self):
         pred = self.pred
         final_state = self._final_states.pop()
         assert len(self._final_states) == 0
 
         for fin in pred[final_state]:
-            assert len(self._transitions[fin]) == 1
-            symbol, states = self._transitions[fin].popitem()
-            assert len(states) == 1
             self._final_states.add(fin)
-            if mapping:
-                mapping[fin] = mapping[symbol]
-                del mapping[symbol]
+            self._transitions[fin].clear()
+            
 
         # remove old final states
         del self._transitions[final_state]
+        remove_unreachable()
+        
 
     def split_to_rules(self):
         res = dict()
@@ -230,48 +228,7 @@ class Nfa:
             res[f] = visited.copy()
 
         return res
-
-
-    '''
-    def split_to_rules(self):
-        succ = self.succ
-        pred = self.pred
-        rules_all = {}
-        gen = self.generator
-
-        if type(gen) != type(2):
-            raise NfaError(
-                'version with multiple or no self-loop states has not been '
-                'implemented')
-
-        for state in succ[gen] - set([gen]):
-            # exclude states with predecessors different from initial
-            # and generator
-            not_first = False
-            for s in pred[state]:
-                if not self._has_path_over_alph(s,s) and \
-                    not s == self._initial_state and s != state:
-                    not_first = True
-                    break
-            if not_first:
-                continue
-
-            # find all states in the rule
-            rule = set([state])
-            actual = set([state])
-            while actual:
-                successors = set()
-                for s in actual:
-                    successors |= succ[s]
-
-                actual = successors - rule
-                rule |= successors
-
-            rules_all[state] = rule
-
-        return rules_all
-    '''
-
+    
     def neigh_count(self, selfloops=False):
         dc = {}
 

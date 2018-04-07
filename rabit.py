@@ -71,17 +71,7 @@ def main():
         " 10 -sat -finite -o " + reduce_file.name
         subprocess.call(proc.split())
         aut = Nfa.parse(reduce_file.name, 'ba')
-
-        aut.retrieve_final_states(mapping)
-        # rename states
-        max_label = max(aut.states) + 1
-        vals = set(mapping.values())
-        for s in aut.states:
-            if s in vals:
-                mapping[s] = max_label
-                max_label += 1
-
-        aut.rename_states(mapping)
+        aut.retrieve_final_states()
         write_output(args.output, aut.write())
 
 if __name__ == "__main__":
