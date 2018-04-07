@@ -160,53 +160,56 @@ float prune(
         throw out_of_range(errmsg);
     }
 }
-
 int merge(
     Nfa &nfa, const map<State, unsigned long> &state_freq, float threshold)
 {
     auto suc = nfa.succ();
+    auto pred = nfa.pred();
+    auto depth = nfa.state_depth();
     map<State,State> mapping;
-    auto rules = nfa.split_to_rules();
     int cnt_merged = 0;
     set<State> to_merge;
-
     State init = nfa.get_initial_state();
     set<State> actual = suc[init];
     set<State> visited = suc[init];
     actual.erase(init);
     visited.insert(init);
+    auto fmax = state_freq.at(init);
 
     while (!actual.empty())
     {
         set<State> next;
         for (auto state : actual)
         {
+            // states are merged if:
+            //  1.) are not final states
+            //  2.) difference between frequencies is low
+            //  3.) frequency is not higher than 0.1 of max
+            //  4.) they're not close to final state
+
             auto freq = state_freq.at(state);
-            if (freq == 0)
-            {
+            if (freq == 0 || nfa.is_final(state) || freq > 0.1 * fmax)
                 continue;
-            }
+
             for (auto next_state : suc[state])
             {
                 if (visited.find(next_state) == visited.end())
                 {
-                    // too close to final state
-                    bool cond = 1;
-                    for (auto x : suc[next_state])
-                    {
-                        if (nfa.is_final(x))
-                        {
-                            cond = false;
+                    bool close = 0;
+                    for (auto i : suc[next_state]) {
+                        if (nfa.is_final(i)) {
+                            // too close
+                            close = 1;
                             break;
                         }
                     }
+
+                    if (nfa.is_final(next_state) || close)
+                        continue;
+                    
                     float diff = 1.0 * state_freq.at(next_state) / freq;
-                    if (cond && diff >= threshold)
+                    if (diff >= threshold)
                     {
-                        // state is merged if:
-                        //  1.) is not a final state
-                        //  2.) is not too close to a final state
-                        //  3.) difference between frequencies is low
                         cnt_merged++;
                         if (mapping.find(state) != mapping.end())
                         {
@@ -214,7 +217,8 @@ int merge(
                         }
                         else
                         {
-                            mapping[next_state] = state;   
+                            mapping[next_state] = state;
+                            to_merge.insert(state);
                         }
                     }
                     next.insert(next_state);
@@ -225,6 +229,7 @@ int merge(
         actual = move(next);
     }
     // just for verification
+    
     for (auto i : to_merge) {
         if (mapping.find(i) != mapping.end()) {
             throw runtime_error("FAILURE");
@@ -232,7 +237,7 @@ int merge(
     }
     if (!mapping.empty())
         nfa.merge_states(mapping);
-    return cnt_merged;
+    return cnt_merged;    
 }
 
 void display_heatmap(const FastNfa &nfa, map<State,size_t> &freq)

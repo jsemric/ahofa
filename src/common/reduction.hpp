@@ -23,4 +23,6 @@ pair<float,size_t> reduce(
     FastNfa &nfa, const string &samples, float pct = -1, float th = 0.995,
     size_t iterations = 0, bool pre = false);
 
+int merge(
+    Nfa &nfa, const map<State, unsigned long> &state_freq, float threshold);
 } // end of namespace

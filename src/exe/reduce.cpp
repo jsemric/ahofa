@@ -70,6 +70,7 @@ int main(int argc, char **argv)
                     break;
                 case 'f':
                     freq_opt = true;
+                    outfile = "output.txt";
                     break;
                 case 'r':
                     opt_cnt++;
@@ -130,6 +131,7 @@ int main(int argc, char **argv)
             cerr << "Reduction: " << new_sc << "/" << old_sc
                 << " " << 100 * new_sc / old_sc << "%\n";
             cerr << "Packet Error: " << res.first << endl;
+            cerr << "Merged: " << res.second << endl;
             nfa.print(out);
         }
 

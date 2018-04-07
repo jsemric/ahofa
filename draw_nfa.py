@@ -27,7 +27,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '-o','--output', type=str, metavar='FILE', default="example.dot",
+        '-o','--output', type=str, metavar='FILE', default="Aut.dot",
         help='output file')
 
     parser.add_argument('input', metavar='NFA', type=str)
@@ -67,6 +67,6 @@ def main():
     subprocess.call(prog.split())
     prog = 'xdg-open ' + image
     subprocess.call(prog.split())
-        
+
 if __name__ == "__main__":
     main()
