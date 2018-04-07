@@ -7,6 +7,7 @@ import numpy as np
 import glob
 import itertools
 import multiprocessing
+import argparse
 
 from nfa import Nfa
 
@@ -41,34 +42,48 @@ def main():
     # executables
     ERROR = './nfa_error'
     REDUCE = './reduce'
-    TEST_PCAP = ['pcaps/meter*', 'pcaps/geant*', 'pcaps/week*']
-    TRAIN_PCAP = 'pcaps/geant.pcap'
-    # number of workers to run in parallel
-    NW = 2
-    # NFA to reduce
-    AUTOMATA = ['dos.rules.fa']
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-r','--ratios', nargs=3, metavar='N', type=float,
+        default=[0.1, 0.32, 0.2], help='reduction ratios (1st,last,step)')
+    parser.add_argument('-i','--iter', type=int, metavar='N',
+        default=4, help='number of iterations')
+    parser.add_argument('-f','--fa', nargs='+', type=str,
+        default=['backdoor.rules.fa'],
+        help='automata to reduce (just basenames!)')
+    parser.add_argument('-n','--nw', type=int,
+        default=multiprocessing.cpu_count() - 1,
+        help='number of workers to run in parallel')
+    parser.add_argument('--test', type=str, nargs='+', metavar='EXP',
+        default=['pcaps/meter*', 'pcaps/geant*', 'pcaps/week*'],
+        help='test pcap files (shellregex possible)')
+    parser.add_argument('--train', type=str, default='geant.pcap',
+        metavar='FILE', help='one train pcap file')
+    args = parser.parse_args()
 
     test_data = ' '.join(
-        set([item for sub in TEST_PCAP for item in glob.glob(sub)]))
-    train_data = TRAIN_PCAP
+        set([item for sub in args.test for item in glob.glob(sub)]))
+    train_data = args.train
 
     # check parameters
     assert type(train_data) == type(str())
     assert len(test_data) >= 1
-    assert 1 <= NW <= multiprocessing.cpu_count()
+    assert 1 <= args.nw <= multiprocessing.cpu_count()
     for i in test_data.split(): check_file(i)
     for i in [train_data, ERROR, REDUCE]: check_file(i)
     for i in [RED_DIR, AUT_DIR]: check_file(i, True)
-    for i in AUTOMATA: check_file(os.path.join(AUT_DIR, i))
+    for i in args.fa: check_file(os.path.join(AUT_DIR, i))
+    for i in args.ratios: assert 0.0001 < i < 0.99
+    assert 0 < args.iter < 17
 
-    nw = str(NW)
-    ratios = np.arange(0.10,0.32,0.15)
-    iterations = range(0,2)
+    nw = str(args.nw)
+    ratios = np.arange(*args.ratios)
+    iterations = range(0, args.iter)
 
     results_error = []
     results_reduction = []
 
-    for aut in AUTOMATA:
+    for aut in args.fa:
         target = os.path.join(AUT_DIR, aut)
         aut = aut.replace('.fa','')
         _, Tstates, _, Ttransitions = Nfa.nfa_size(target)
@@ -105,7 +120,6 @@ def main():
             o = call(prog)
             o = o.decode("utf-8")
             results_error.append(o)
-
 
     with open(ERR_CSV, 'a') as f:
         for i in results_error: f.write(i)
