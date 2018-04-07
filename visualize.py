@@ -7,10 +7,15 @@ import sys
 import re
 import os
 
+def barplots(df):
+    # take the smallest mean among iterations and plot barplots with errors
+    pass
+
+
 def display(df, rowname, *, save=False):
-    # TODO check difference between iterations
     df_nfa =  df.loc[rowname].unstack(level=[1])
     diff = abs((df_nfa['ce',0] - df_nfa['ce',1]).mean())
+
     if diff < 0.005:
         # display only pruning
         df_nfa = df_nfa.loc[:, (slice(None),0)]
@@ -20,7 +25,7 @@ def display(df, rowname, *, save=False):
         ax = df_nfa.plot(title=rowname, marker='o')
         ax.margins(0.05, 0.05)
         if save:
-            ax.get_figure().savefig('figures/{}.png'.format(rowname))   
+            ax.get_figure().savefig('figures/{}.png'.format(rowname))
         else:
             plt.show()
     else:
@@ -29,7 +34,7 @@ def display(df, rowname, *, save=False):
         ax.set_ylabel('classification error')
         ax.margins(0.05, 0.05)
         if save:
-            ax.get_figure().savefig('figures/{}-ce.png'.format(rowname))   
+            ax.get_figure().savefig('figures/{}-ce.png'.format(rowname))
         else:
             plt.show()
 
@@ -37,7 +42,7 @@ def display(df, rowname, *, save=False):
         ax.set_ylabel('positive positive ratio')
         ax.margins(0.05, 0.05)
         if save:
-            ax.get_figure().savefig('figures/{}-ppr.png'.format(rowname))   
+            ax.get_figure().savefig('figures/{}-ppr.png'.format(rowname))
         else:
             plt.show()
 

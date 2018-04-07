@@ -20,7 +20,6 @@ def write_output(fname, gen):
         for i in gen:
             f.write(i)
 def main():
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-o','--output', type=str, metavar='FILE', default="automaton.fa",
