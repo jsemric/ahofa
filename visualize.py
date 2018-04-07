@@ -7,9 +7,44 @@ import sys
 import re
 import os
 
+def display(df, rowname, *, save=False):
+    # TODO check difference between iterations
+    df_nfa =  df.loc[rowname].unstack(level=[1])
+    diff = abs((df_nfa['ce',0] - df_nfa['ce',1]).mean())
+    if diff < 0.005:
+        # display only pruning
+        df_nfa = df_nfa.loc[:, (slice(None),0)]
+        df_nfa.columns = ['ce','ppr']
+        if df_nfa.loc[:, 'ppr'].sum() == 0:
+            df_nfa = df_nfa.drop('ppr',axis=1)
+        ax = df_nfa.plot(title=rowname, marker='o')
+        ax.margins(0.05, 0.05)
+        if save:
+            ax.get_figure().savefig('figures/{}.png'.format(rowname))   
+        else:
+            plt.show()
+    else:
+        # display all iterations
+        ax = df_nfa['ce'].plot(title=rowname, marker='o')
+        ax.set_ylabel('classification error')
+        ax.margins(0.05, 0.05)
+        if save:
+            ax.get_figure().savefig('figures/{}-ce.png'.format(rowname))   
+        else:
+            plt.show()
+
+        ax = df_nfa['ppr'].plot(title=rowname, marker='o')
+        ax.set_ylabel('positive positive ratio')
+        ax.margins(0.05, 0.05)
+        if save:
+            ax.get_figure().savefig('figures/{}-ppr.png'.format(rowname))   
+        else:
+            plt.show()
+
+
 def main():
-    error = 'experiments/error.csv'
-    reduction = 'experiments/reduction.csv'
+    error = 'experiments/error2.csv'
+    reduction = 'experiments/reduction2.csv'
 
     df1 = pd.read_csv(error).drop_duplicates()
     dfe = df1.groupby('reduced').sum()
@@ -24,31 +59,14 @@ def main():
     comb = comb.reset_index()
     comb['reduced'] = comb['reduced'].apply(lambda x: re.sub('\..*$','',x))
     comb = comb.set_index(['reduced','ratio','iter'])
-
-    # plot backdoor
-    bd = comb.unstack(level=[0,2])
-    plt.style.use('ggplot')
-    
-    ax = bd['ce','backdoor'].plot(title='backdoor.rules ppr',marker='o')
-    ax.set_ylabel('classification error')
-    ax.get_figure().savefig('backdoor-ce.png')
-    #plt.show()
-
-    ax = bd['ppr','backdoor'].plot(title='backdoor.rules ppr',marker='o')
-    ax.set_ylabel('positive positive rate')
-    ax.get_figure().savefig('backdoor-ppr.png')
-    #plt.show()
-
-    # plot sprobe
-    comb = comb.loc[(['sprobe'], slice(None), [0])]
-    comb = comb.unstack(level=[0,2])
-    comb.columns = ['ce','ppr']
-
-    ax = comb.plot(title='sprobe pruning',marker='o')
-    #plt.show()
-    ax.get_figure().savefig('sprobe-pruning.png')
     print(comb)
 
+    plt.style.use('ggplot')
+    toplevel = set([x for x, *_ in list(comb.index)])
+    for i in toplevel:
+        display(comb, i, save=False)
+
+    exit(0)
 
 def pcap_analysis(fname='mc.txt'):
     # read with mixed data type, numpy stores result in 1d structured array
