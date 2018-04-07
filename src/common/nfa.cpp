@@ -259,39 +259,6 @@ map<State,State> Nfa::split_to_rules() const
     return ret;
 }
 
-set<State> Nfa::breadth_first_search(set<State> actual) const
-{
-    if (actual.empty())
-    {
-        actual = set<State>{initial_state};
-    }
-    
-    auto visited = actual;
-
-    while (!actual.empty()) 
-    {
-        set<State> next;
-        for (auto s : actual) 
-        {
-            for (auto i : transitions.at(s))
-            {
-                for (auto j : i.second)
-                {
-                    if (visited.find(j) == visited.end())
-                    {
-                        next.insert(j);
-                        visited.insert(j);
-                    }
-                }
-            }
-        }
-
-        actual = move(next);
-    }
-
-    return visited;
-}
-
 void Nfa::print(ostream &out) const
 {
     out << initial_state << "\n";
@@ -375,79 +342,30 @@ map<State,unsigned> Nfa::state_depth() const
     return ret;
 }
 
-void Nfa::remove_unreachable()
-{
-    auto visited = breadth_first_search();
-    vector<State> to_remove;
-    for (auto i : transitions)
-    {
-        if (visited.find(i.first) == visited.end())
-            to_remove.push_back(i.first);
-    }
-
-    for (auto i : to_remove)
-    {
-        transitions.erase(i);
-        final_states.erase(i);
-    }
-}
-
-// TODO
-// void Nfa::remove_non_finishing()
-
-void Nfa::merge_final_states(bool merge_all_states)
+void Nfa::merge_sl_states()
 {
     map<State,State> mapping;
-    vector<set<State>> rules;
+    set<State> s;
     auto pre = pred();
     auto suc = succ();
-
-    if (merge_all_states)
+    for (auto state : suc[initial_state])
     {
-        rules.push_back(final_states);
-    }
-    else
-    {
-        for (auto state : suc[initial_state])
+        if (has_selfloop_over_alph(state) && pre[state].size() == 2)
         {
-            if (has_selfloop_over_alph(state) && pre[state].size() == 2)
-            {
-                set<State> init{state};
-                auto rule = breadth_first_search(init);
-                rules.push_back(rule);
-            }
+            s.insert(state);
         }
     }
-
-    for (auto i : rules)
-    {
-        State first = initial_state;
-        for (auto j : i)
-        {
-            if (is_final(j))
-            {
-                if (first == initial_state)
-                {
-                    first = j;
-                }
-                else
-                {
-                    mapping[j] = first;
-                }
-            }
-        }
+    s.erase(initial_state);
+    State first = initial_state;
+    for (auto i : s) {
+        if (first == initial_state)
+            first = i;
+        else
+            mapping[i] = first;
     }
 
     if (!mapping.empty())
         merge_states(mapping);
-
-    for (auto i : final_states)
-    {
-        // clear final states transitions
-        transitions[i].clear();
-    }
-
-    remove_unreachable();
 }
 
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

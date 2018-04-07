@@ -80,15 +80,11 @@ public:
     // helpful functions
     bool has_selfloop_over_alph(State s) const;
     map<State,State> split_to_rules() const;
+    void merge_sl_states();
     map<State,set<State>> pred() const;
     map<State,set<State>> succ() const;
     map<State,unsigned> state_depth() const;
     void clear_final_state_selfloop();
-    void merge_final_states(bool merge_all_states = false);
-    void remove_unreachable();
-    std::set<State> breadth_first_search(
-        set<State> actual = set<State>{}) const;
-
     // essential
     void merge_states(const map<State,State> &mapping);
 
