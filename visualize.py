@@ -48,8 +48,8 @@ def display(df, rowname, *, save=False):
 
 
 def main():
-    error = 'experiments/error2.csv'
-    reduction = 'experiments/reduction2.csv'
+    error = 'experiments/error.csv'
+    reduction = 'experiments/reduction.csv'
 
     df1 = pd.read_csv(error).drop_duplicates()
     dfe = df1.groupby('reduced').sum()

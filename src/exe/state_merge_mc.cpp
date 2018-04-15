@@ -23,7 +23,7 @@ vector<vector<size_t>> label_with_prefix(const FastNfa &nfa, string pcap)
                 nfa.parse_word(payload, len,
                     [&state_labels, &prefix](State s)
                     {
-                        // insert to a vector only once
+                        // insert to a vector only once at max
                         if (state_labels[s].empty() ||
                             state_labels[s].back() != prefix)
                         {
@@ -49,12 +49,12 @@ int main(int argc, char **argv)
     nfa.read_from_file(argv[1]);
     auto state_labels = label_with_prefix(nfa, argv[2]);
 
-    int total = 0;
-    // let us see which states are `similar`
+    // which states are `similar`
     map<pair<size_t,size_t>,pair<int,float>> sim_states;
     for (size_t i = 0; i < state_labels.size(); i++) {
-
+        float max_pct = 0;
         if (state_labels[i].empty()) {
+            //cout << max_pct << endl;
             continue;
         }
 
@@ -69,15 +69,15 @@ int main(int argc, char **argv)
             if (it != res.begin()) {
                 int denom = max(state_labels[i].size(), state_labels[j].size());
                 int same = it - res.begin();
-                float pct = same * 1.0 / denom;
+                float pct = same * 100.0 / denom;
+                max_pct = pct > max_pct ? pct : max_pct;
+                //cout << pct << endl;
                 sim_states[pair<size_t,size_t>(i,j)] =
                     pair<size_t,float>(same, pct);
-                if (pct > 0.1) total++;
-                //if (state_labels[i] == state_labels[j]) total++;
             }
         }
+        cout << max_pct << endl;
     }
-    cerr << total << endl;
 
     return 0;
 }
