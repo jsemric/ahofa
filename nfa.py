@@ -180,39 +180,6 @@ class Nfa:
 
         return not sum(alph)
 
-    def extend_final_states(self):
-        # TODO retrieve final states labels
-        symbol = 257
-        new_state_id = max(self.states) + 1
-        mapping = dict()
-        new_finals = set()
-
-        for fin in self._final_states:
-            self._transitions[fin][symbol].add(new_state_id)
-            mapping[symbol] = fin
-            self._transitions[new_state_id] = defaultdict(set)
-            new_finals.add(new_state_id)
-            new_state_id += 1
-            symbol += 1
-
-        self._final_states = new_finals
-        return mapping
-
-    def retrieve_final_states(self):
-        pred = self.pred
-        final_state = self._final_states.pop()
-        assert len(self._final_states) == 0
-
-        for fin in pred[final_state]:
-            self._final_states.add(fin)
-            self._transitions[fin].clear()
-            
-
-        # remove old final states
-        del self._transitions[final_state]
-        remove_unreachable()
-        
-
     def split_to_rules(self):
         res = dict()
         pred = self.pred
@@ -228,7 +195,7 @@ class Nfa:
             res[f] = visited.copy()
 
         return res
-    
+
     def neigh_count(self, selfloops=False):
         dc = {}
 
@@ -238,55 +205,6 @@ class Nfa:
             dc[state] = len(suc)
 
         return dc
-
-    def remove_states(self, to_remove):
-        if self._initial_state in to_remove:
-            raise NfaError('cannot remove initial state')
-
-        for state, rules in self._transitions.copy().items():
-            if state in to_remove:
-                del self._transitions[state]
-            else:
-                for symbol, states in rules.items():
-                    self._transitions[state][symbol] = states - to_remove
-
-        self._final_states -= to_remove
-
-    def clear_final_state_selfloop(self):
-        trans = self._transitions
-        for fstate in self._final_states:
-            for c in range(256):
-                if c in trans[fstate].keys():
-                    trans[fstate][c].discard(fstate)
-
-    def remove_unreachable(self):
-        succ = self.succ
-        actual = set([self._initial_state])
-        reached = set()
-        while actual:
-            reached = reached.union(actual)
-            new = set()
-            for q in actual:
-                new = new.union(succ[q])
-            actual = new - reached
-
-        self.remove_states(set([s for s in self.states if s not in reached]))
-
-    def rename_states(self, mapping):
-        trans = self._transitions
-        for p, q in mapping.items():
-            trans[q] = trans[p].copy()
-            del trans[p]
-
-        for state, rules in trans.items():
-            for symbol, states in rules.items():
-                for state in states.copy():
-                    if state in mapping:
-                        states.discard(state)
-                        states.add(mapping[state])
-        self._final_states = set(
-            [mapping[x] if x in mapping else x
-            for x in self._final_states.copy()])
 
     ###########################################################################
     # IO METHODS
@@ -362,7 +280,7 @@ class Nfa:
                         yield '{},[{}]->[{}]\n'.format(hex(key), state, q)
                     else:
                         yield '{} {} {}\n'.format(state, q, hex(key))
-                        
+
         for qf in self._final_states:
             if how == 'ba':
                 yield '[{}]\n'.format(qf)

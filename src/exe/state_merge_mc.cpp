@@ -58,7 +58,9 @@ int main(int argc, char **argv)
             continue;
         }
 
-        for (size_t j = i + 1; j < state_labels.size(); j++) {
+        //for (size_t j = i + 1; j < state_labels.size(); j++) {
+        for (size_t j = 0; j < state_labels.size(); j++) {
+            if (i == j) continue;
             // compute the intersection
             // vectors are supposed to be sorted
             vector<size_t> res(state_labels[i].size());

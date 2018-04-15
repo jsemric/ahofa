@@ -57,7 +57,7 @@ def main():
     parser.add_argument('--test', type=str, nargs='+', metavar='EXP',
         default=['pcaps/meter*', 'pcaps/geant*', 'pcaps/week*'],
         help='test pcap files (shellregex possible)')
-    parser.add_argument('--train', type=str, default='geant.pcap',
+    parser.add_argument('--train', type=str, default='pcaps/geant.pcap',
         metavar='FILE', help='one train pcap file')
     args = parser.parse_args()
 
