@@ -180,6 +180,36 @@ class Nfa:
 
         return not sum(alph)
 
+    def extend_final_states(self):
+        symbol = 257
+        new_state_id = max(self.states) + 1
+        new_finals = set()
+
+        for fin in self._final_states:
+            self._transitions[fin][symbol].add(new_state_id)
+            self._transitions[new_state_id] = defaultdict(set)
+            new_finals.add(new_state_id)
+            new_state_id += 1
+            symbol += 1
+
+        self._final_states = new_finals
+        return symbol - 1
+
+    def retrieve_final_states(self):
+        pred = self.pred
+        final_state = self._final_states.pop()
+        assert len(self._final_states) == 0
+
+        for fin in pred[final_state]:
+            #assert len(self._transitions[fin]) == 1
+            self._transitions[fin] = {
+                key:val for key,val in self._transitions[fin].items()
+                if key < 256}
+            self._final_states.add(fin)
+
+        # remove old final state
+        del self._transitions[final_state]
+
     def split_to_rules(self):
         res = dict()
         pred = self.pred

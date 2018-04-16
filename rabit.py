@@ -64,12 +64,14 @@ def main():
         reduce_file = tempfile.NamedTemporaryFile()
 
         aut = Nfa.parse(args.input, 'fa')
+        aut.extend_final_states()
         write_output(ba_file.name, aut.write(how='ba'))
 
         proc = "java -jar " + jarfile + " " + ba_file.name + \
         " 10 -sat -finite -o " + reduce_file.name
         subprocess.call(proc.split())
         aut = Nfa.parse(reduce_file.name, 'ba')
+        aut.retrieve_final_states()
         write_output(args.output, aut.write())
 
 if __name__ == "__main__":

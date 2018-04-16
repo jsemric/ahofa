@@ -14,12 +14,11 @@ def write_output(fname, gen):
         for i in gen:
             f.write(i)
 
-def fa2timbuk(nfa, mapping, fname):
+def fa2timbuk(nfa, msym, fname):
     with open(fname,'w') as f:
         f.write('Automaton A @LFA\n')
-        f.write('Ops x:0 ' + ' '.join(str(i) + ':1' for i in range(256)))
-        f.write(' ' + ' '.join(str(x) + ':1' for x in mapping.keys()) + '\n')
-        f.write('States ' + ' '.join('q'+str(x) for x in nfa.states) + '\n')
+        f.write('Ops x:0 ' + ' '.join(str(i) + ':1' for i in range(msym+1)))
+        f.write('\nStates ' + ' '.join('q'+str(x) for x in nfa.states) + '\n')
         f.write('Final States ' +
             ' '.join('q'+str(x) for x in nfa._final_states) + '\n')
         f.write('Transitions\n')
@@ -81,9 +80,10 @@ def main():
     sys.stderr.write('Parsing FA file\n')
     aut = Nfa.parse(args.input)
     sys.stderr.write('Extending final states\n')
-    mapping = aut.extend_final_states()
+    sym = aut.extend_final_states()
     sys.stderr.write('Converting to timbuk format\n')
-    fa2timbuk(aut, mapping, tb_file.name)
+    fa2timbuk(aut, sym, tb_file.name)
+    fa2timbuk(aut, sym, 'tmp2')
     sys.stderr.write('Parsing timbuk file\n')
     a = sbl.parse(tb_file.name)
     sys.stderr.write('Minimizing\n')
@@ -92,7 +92,7 @@ def main():
     aut = timbuk2fa(min_file.name)
     sys.stderr.write('Retrieving final states\n')
     aut.retrieve_final_states()
-    
+
     write_output(args.output, aut.write())
     sys.stderr.write('Saved as ' + args.output + '\n')
 
