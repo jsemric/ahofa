@@ -24,18 +24,17 @@ using namespace std;
 namespace fs = boost::filesystem;
 
 const char *helpstr =
-"The program computes an nfa statistics of the over-approximated NFA. \n"
-"Positional arguments are TARGET REDUCED PCAPS ..., where TARGET is an \n"
-"input NFA, REDUCED denotes over-approximated reduction of the TARGET and \n"
-"PCAPS are packet capture files.\n"
-"Usage: ./nfa_handler [OPTIONS] TARGET REDUCED ...\n"
-"options:\n"
+"Usage: ./nfa_eval [OPTIONS] TARGET REDUCED PCAP...\n"
+"Compute statistics about for REDUCED automaton of the TARGET on PCAP files.\n"
+"TARGET and REDUCED are nfa of FA format\n"
+"PCAP are packet capture files\n"
+"\noptions:\n"
 "  -h            : show this help and exit\n"
 "  -o <FILE>     : specify output file\n"
 "  -n <NWORKERS> : number of workers to run in parallel\n"
-"  -c            : rigorous stats computation, consistent but much slower,\n"
+"  -r            : rigorous stats computation, consistent but much slower,\n"
 "                  use only if not sure about over-approximation\n"
-"  -s            : output in CSV format\n";
+"  -c            : output in CSV format\n";
 
 void write_nfa_stats(
     ostream &out, const vector<pair<string,NfaStats>> &data,
@@ -89,7 +88,7 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        while ((c = getopt(argc, argv, "ho:n:cs")) != -1) {
+        while ((c = getopt(argc, argv, "ho:n:rc")) != -1) {
             opt_cnt++;
             switch (c) {
                 // general options
@@ -104,10 +103,10 @@ int main(int argc, char **argv)
                     nworkers = stoi(optarg);
                     opt_cnt++;
                     break;
-                case 'c':
+                case 'r':
                     consistent = true;
                     break;
-                case 's':
+                case 'c':
                     csv = true;
                     break;
                 default:
