@@ -14,7 +14,7 @@ namespace reduction
 
 using namespace std;
 
-struct ErrorStats
+struct NfaStats
 {
     // array data
     vector<size_t> reduced_states_arr;
@@ -27,20 +27,20 @@ struct ErrorStats
     size_t pp_c;    // positive positive classification
     size_t all_c;   // all additional classifications
 
-    ErrorStats(size_t data_reduced_size = 1, size_t data_target_size = 1) :
+    NfaStats(size_t data_reduced_size = 1, size_t data_target_size = 1) :
         reduced_states_arr(data_reduced_size),
         target_states_arr(data_target_size), total{0},
         fp_a{0}, pp_a{0}, fp_c{0}, pp_c{0}, all_c{0} {}
 
-    ~ErrorStats() = default;
+    ~NfaStats() = default;
 
-    void aggregate(const ErrorStats &d)
+    void aggregate(const NfaStats &d)
     {
         if (d.reduced_states_arr.size() != reduced_states_arr.size() ||
             d.target_states_arr.size() != target_states_arr.size())
         {
             throw runtime_error(
-                "ErrorStats.aggregate: different array size");
+                "NfaStats.aggregate: different array size");
         }
 
         total += d.total;
@@ -49,7 +49,7 @@ struct ErrorStats
         fp_c += d.fp_c;
         pp_c += d.pp_c;
         all_c += d.all_c;
-        
+
         for (size_t i = 0; i < d.reduced_states_arr.size(); i++) {
             reduced_states_arr[i] += d.reduced_states_arr[i];
         }
@@ -59,7 +59,7 @@ struct ErrorStats
     }
 };
 
-vector<pair<string,ErrorStats>> compute_error(
+vector<pair<string,NfaStats>> compute_nfa_stats(
     const FastNfa &target, const FastNfa &reduced, const vector<string> &pcaps,
     bool consistent = false);
 

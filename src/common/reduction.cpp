@@ -161,7 +161,8 @@ float prune(
     }
 }
 int merge(
-    Nfa &nfa, const map<State, unsigned long> &state_freq, float threshold)
+    Nfa &nfa, const map<State, unsigned long> &state_freq, float threshold,
+    float max_freq)
 {
     auto suc = nfa.succ();
     auto pred = nfa.pred();
@@ -188,7 +189,7 @@ int merge(
             //  4.) they're not close to final state
 
             auto freq = state_freq.at(state);
-            if (freq == 0 || nfa.is_final(state) || freq > 0.1 * fmax)
+            if (freq == 0 || nfa.is_final(state) || freq > max_freq * fmax)
                 continue;
 
             for (auto next_state : suc[state])
@@ -259,7 +260,7 @@ void display_heatmap(const FastNfa &nfa, map<State,size_t> &freq)
 
 pair<float,size_t> reduce(
     FastNfa &nfa, const string &samples, float pct, float th,
-    size_t iterations, bool pre)
+    size_t iterations, bool pre, float max_freq)
 {
     assert((pct > 0 && pct <= 1) || pct == -1);
     assert(th <= 1 && th >= 0.25);
@@ -276,7 +277,7 @@ pair<float,size_t> reduce(
         if (iterations > 0)
         {
             // just 1 merge
-            merged = merge(nfa, state_freq, th);
+            merged = merge(nfa, state_freq, th, max_freq);
         }
     }
     else
@@ -309,7 +310,7 @@ pair<float,size_t> reduce(
             #endif
             
             // compute % reduction in each turn
-            merged += merge(nfa, state_freq, th);
+            merged += merge(nfa, state_freq, th, max_freq);
             nfa.build();
 
             #if 0

@@ -26,6 +26,7 @@ const char *helpstr =
 "  -s            : use file with state frequencies instead of pcap\n"
 "  -t <N>        : frequency threshold for merging, default 0.995\n"
 "  -i <N>        : number of iterations, default 0, which means pruning\n"
+"  -m <N>        : max freq for merging, default 0.1\n"
 "  -r <N>        : reduction rate\n";
 
 void check_float(float x, float max_val = 1, float min_val = 0)
@@ -44,6 +45,7 @@ int main(int argc, char **argv)
     bool freq_opt = false;
     float rratio = -1;
     float threshold = 0.995;
+    float max_fr = 0.1;
     size_t iter = 0;
     string outfile = "reduced-nfa.fa", pcap;
     bool pre = false;
@@ -76,6 +78,11 @@ int main(int argc, char **argv)
                     opt_cnt++;
                     rratio = stod(optarg);
                     check_float(rratio);
+                    break;
+                case 'm':
+                    opt_cnt++;
+                    max_fr = stod(optarg);
+                    check_float(max_fr);
                     break;
                 case 's':
                     pre = true;
@@ -125,7 +132,7 @@ int main(int argc, char **argv)
         else
         {
             auto old_sc = nfa.state_count();
-            auto res = reduce(nfa, pcap, rratio, threshold, iter, pre);
+            auto res = reduce(nfa, pcap, rratio, threshold, iter, pre, max_fr);
             auto new_sc = nfa.state_count();
 
             cerr << "Reduction: " << new_sc << "/" << old_sc

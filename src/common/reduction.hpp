@@ -21,8 +21,9 @@ map<State, unsigned long> compute_freq(
 
 pair<float,size_t> reduce(
     FastNfa &nfa, const string &samples, float pct = -1, float th = 0.995,
-    size_t iterations = 0, bool pre = false);
+    size_t iterations = 0, bool pre = false, float max_freq = 0.1);
 
 int merge(
-    Nfa &nfa, const map<State, unsigned long> &state_freq, float threshold);
+    Nfa &nfa, const map<State, unsigned long> &state_freq, float threshold,
+    float max_freq);
 } // end of namespace

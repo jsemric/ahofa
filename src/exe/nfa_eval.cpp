@@ -15,7 +15,7 @@
 
 #include <boost/filesystem.hpp>
 
-#include "nfa_error.hpp"
+#include "nfa_stats.hpp"
 #include "nfa.hpp"
 
 using namespace reduction;
@@ -24,53 +24,26 @@ using namespace std;
 namespace fs = boost::filesystem;
 
 const char *helpstr =
-"The program computes an error of an incorrect packet classification by an\n"
-"over-approximated NFA. Positional arguments are TARGET REDUCED PCAPS ...,\n"
-"where TARGET is an input NFA, REDUCED denotes over-approximated reduction\n"
-"of the TARGET and PCAPS are packet capture files.\n"
+"The program computes an nfa statistics of the over-approximated NFA. \n"
+"Positional arguments are TARGET REDUCED PCAPS ..., where TARGET is an \n"
+"input NFA, REDUCED denotes over-approximated reduction of the TARGET and \n"
+"PCAPS are packet capture files.\n"
 "Usage: ./nfa_handler [OPTIONS] TARGET REDUCED ...\n"
 "options:\n"
 "  -h            : show this help and exit\n"
 "  -o <FILE>     : specify output file\n"
 "  -n <NWORKERS> : number of workers to run in parallel\n"
-"  -c            : rigorous error computation, consistent but much slower,\n"
+"  -c            : rigorous stats computation, consistent but much slower,\n"
 "                  use only if not sure about over-approximation\n"
-"  -a            : aggregate statistics, otherwise output is in csv format\n"
-"  -d            : add csv header\n";
+"  -s            : output in CSV format\n";
 
-void write_error_stats(
-    ostream &out, const vector<pair<string,ErrorStats>> &data,
-    string reduced_str, bool aggregate, bool header,
-    size_t sc_t, size_t sc_r)
+void write_nfa_stats(
+    ostream &out, const vector<pair<string,NfaStats>> &data,
+    string reduced_str, bool csv, size_t sc_t, size_t sc_r)
 {
     float ratio = sc_r * 1.0 / sc_t;
-    if (aggregate)
-    {
-        ErrorStats aggr(sc_r, sc_t);
-        for (auto i : data)
-            aggr.aggregate(i.second);
-
-        float pe = aggr.fp_a * 1.0 / aggr.total;
-        float ce = aggr.fp_c * 1.0 / aggr.total;
-        float cls_ratio = aggr.pp_c * 1.0 / (aggr.pp_c + aggr.fp_c);
-        assert(cls_ratio >= 0 && cls_ratio <= 1);
-        assert(pe >= 0 && pe <= ce && ce <= 1);
-        out << "reduction : " << ratio << endl;
-        out << "total     : " << aggr.total << endl;
-        out << "pe        : " << pe << endl;
-        out << "ce        : " << ce << endl;
-        out << "+rate     : " << cls_ratio << endl;
-    }
-    else
-    {
-        if (header)
-        {
-            out << "reduced,pcap,total,fp_a,pp_a,fp_c,pp_c,all_c"
-                << endl;
-        }
-
-        for (auto i : data)
-        {
+    if (csv) {
+        for (auto i : data) {
             auto pcap = i.first;
             auto d = i.second;
             out <<  fs::basename(reduced_str)
@@ -78,6 +51,21 @@ void write_error_stats(
                 << d.total << "," <<  d.fp_a << "," << d.pp_a << "," << d.fp_c
                 << "," << d.pp_c << "," << d.all_c << endl;
         }
+    }
+    else {
+        NfaStats aggr(sc_r, sc_t);
+        for (auto i : data)
+            aggr.aggregate(i.second);
+
+        float accuracy = 1.0 - aggr.fp_c * 1.0 / aggr.total;
+        float precision = aggr.pp_c * 1.0 / (aggr.pp_c + aggr.fp_c);
+
+        assert(precision >= 0 && precision <= 1);
+        assert(0 <= accuracy && accuracy <= 1);
+        out << "reduction : " << ratio << endl;
+        out << "total     : " << aggr.total << endl;
+        out << "accuracy  : " << accuracy << endl;
+        out << "precision : " << precision << endl;
     }
 }
 
@@ -87,7 +75,7 @@ int main(int argc, char **argv)
     string outfile;
     vector<string> pcaps;
     unsigned nworkers = 1;
-    bool consistent = false, aggregate = false, header = false;
+    bool consistent = false, csv = false;
 
     FastNfa target, reduced;
     string nfa_str1, nfa_str2;
@@ -96,14 +84,12 @@ int main(int argc, char **argv)
     int c;
 
     try {
-        if (argc < 2)
-        {
+        if (argc < 2) {
             cerr << helpstr;
             return 1;
         }
 
-        while ((c = getopt(argc, argv, "ho:n:cad")) != -1)
-        {
+        while ((c = getopt(argc, argv, "ho:n:cs")) != -1) {
             opt_cnt++;
             switch (c) {
                 // general options
@@ -121,11 +107,8 @@ int main(int argc, char **argv)
                 case 'c':
                     consistent = true;
                     break;
-                case 'a':
-                    aggregate = true;
-                    break;
-                case 'd':
-                    header = true;
+                case 's':
+                    csv = true;
                     break;
                 default:
                     return 1;
@@ -148,13 +131,10 @@ int main(int argc, char **argv)
 
         // get capture files
         for (int i = opt_cnt + 2; i < argc; i++)
-        {
             pcaps.push_back(argv[i]);
-        }
 
         ostream *output = &cout;
-        if (outfile != "")
-        {
+        if (outfile != "") {
             output = new ofstream(outfile);
             if (!static_cast<ofstream*>(output)->is_open())
                 throw runtime_error("cannot open output file");
@@ -163,30 +143,24 @@ int main(int argc, char **argv)
         // divide work
         vector<vector<string>> v(nworkers);
         for (unsigned i = 0; i < pcaps.size(); i++)
-        {
             v[i % nworkers].push_back(pcaps[i]);
-        }
 
-        vector<pair<string,ErrorStats>> stats;
-        vector<future<vector<pair<string,ErrorStats>>>> threads;
+        vector<pair<string,NfaStats>> stats;
+        vector<future<vector<pair<string,NfaStats>>>> threads;
         for (unsigned i = 0; i < nworkers; i++)
-        {
             threads.push_back(
                 async(
-                    compute_error,ref(target),ref(reduced),ref(v[i]),
+                    compute_nfa_stats, ref(target),ref(reduced),ref(v[i]),
                     consistent)
                 );
-        }
 
-        for (unsigned i = 0; i < nworkers; i++)
-        {
+        for (unsigned i = 0; i < nworkers; i++) {
             auto r = threads[i].get();
             stats.insert(stats.end(), r.begin(), r.end());
         }
 
-        write_error_stats(
-            *output, stats, nfa_str2, aggregate, header,
-            target.state_count(), reduced.state_count());
+        write_nfa_stats(*output, stats, nfa_str2, csv, target.state_count(),
+            reduced.state_count());
 
         unsigned msec = chrono::duration_cast<chrono::microseconds>(
             chrono::steady_clock::now() - timepoint).count();
@@ -195,8 +169,7 @@ int main(int argc, char **argv)
         cerr << "duration  : " << min << "m/" << sec % 60 << "s/"
             << msec % 1000 << "ms\"\n";
 
-        if (outfile != "")
-        {
+        if (outfile != "") {
             static_cast<ofstream*>(output)->close();
             delete output;
         }

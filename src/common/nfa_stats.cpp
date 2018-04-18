@@ -6,37 +6,34 @@
 #include <vector>
 #include <ctype.h>
 
-#include "nfa_error.hpp"
+#include "nfa_stats.hpp"
 #include "nfa.hpp"
 #include "pcap_reader.hpp"
 
 namespace reduction
 {
 
-vector<pair<string,ErrorStats>> compute_error(
+vector<pair<string,NfaStats>> compute_nfa_stats(
     const FastNfa &target, const FastNfa &reduced, const vector<string> &pcaps,
     bool consistent)
 {
-    for (auto i : pcaps)
-    {
+    for (auto i : pcaps) {
         char err_buf[4096] = "";
         pcap_t *p;
 
         if (!(p = pcap_open_offline(i.c_str(), err_buf)))
-        {
             throw runtime_error("Not a valid pcap file: \'" + i + "'");
-        }
+
         pcap_close(p);
     }
 
     auto fidx_target = target.get_final_state_idx();
     auto fidx_reduced = reduced.get_final_state_idx();
-    vector<pair<string,ErrorStats>> results;
+    vector<pair<string,NfaStats>> results;
 
     for (auto p : pcaps) {
-        ErrorStats stats(reduced.state_count(), target.state_count());
-        try
-        {
+        NfaStats stats(reduced.state_count(), target.state_count());
+        try {
             pcapreader::process_payload(
                 p.c_str(),
                 [&] (const unsigned char *payload, unsigned len)
@@ -49,11 +46,9 @@ vector<pair<string,ErrorStats>> compute_error(
 
                     int match1 = 0;
                     stats.total++;
-                    for (size_t i = 0; i < fidx_reduced.size(); i++)
-                    {
+                    for (size_t i = 0; i < fidx_reduced.size(); i++) {
                         size_t idx = fidx_reduced[i];
-                        if (bm[idx])
-                        {
+                        if (bm[idx]) {
                             match1++;
                             assert(idx < stats.reduced_states_arr.size());
                             stats.reduced_states_arr[idx]++;
@@ -62,36 +57,29 @@ vector<pair<string,ErrorStats>> compute_error(
 
                     //stats. += match1 > 0;
                     int match2 = 0;
-                    if (match1 || consistent)
-                    {    
+                    if (match1 || consistent) {
                         // something was matched, lets find the difference
                         vector<bool> bm(target.state_count());
                         target.parse_word(
                             payload, len, [&bm](State s){ bm[s] = 1; });
-                        for (size_t i = 0; i < fidx_target.size(); i++)
-                        {
+                        for (size_t i = 0; i < fidx_target.size(); i++) {
                             size_t idx = fidx_target[i];
-                            if (bm[idx])
-                            {
+                            if (bm[idx]) {
                                 match2++;
                                 assert(idx < stats.target_states_arr.size());
                                 stats.target_states_arr[idx]++;
                             }
                         }
 
-                        if (match1 != match2)
-                        {
+                        if (match1 != match2) {
                             stats.fp_c++;
                             stats.all_c += match1 - match2;
                             if (consistent && match2 > match1)
-                            {
                                 throw runtime_error(
                                     "Reduced automaton ain't "
                                     "over-approximation!\n");
-                            }
                         }
-                        else if (match1)
-                        {
+                        else if (match1) {
                             stats.pp_c++;
                         }
                         // accepted packet false/positive positive
@@ -106,7 +94,7 @@ vector<pair<string,ErrorStats>> compute_error(
                         }
                     }
                 });
-            results.push_back(pair<string,ErrorStats>(p,stats));
+            results.push_back(pair<string,NfaStats>(p,stats));
         }
         catch (exception &e) {
             // other error

@@ -12,7 +12,7 @@ EXE=$(SRCDIR)/exe
 CXXFLAGS=$(STD) -Wall -Wextra -pedantic  -I $(COMMON) -O3 #-Wfatal-errors #-DNDEBUG
 LIBS=-lpcap -lpthread -lboost_system -lboost_filesystem
 
-PROG=nfa_error lmin reduce par_test
+PROG=nfa_eval lmin reduce
 all: $(PROG)
 
 SRC=$(wildcard $(COMMON)/*.cpp)
@@ -21,32 +21,22 @@ OBJ=$(patsubst %.cpp, %.o, $(SRC))
 
 .PHONY: clean all
 
-# quite fast on multicore
-nfa_error: $(EXE)/nfa_error.o $(OBJ)
+nfa_eval: $(EXE)/nfa_eval.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
-$(EXE)/nfa_error.o: $(EXE)/nfa_error.cpp
+$(EXE)/nfa_eval.o: $(EXE)/nfa_eval.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
-# reduction of automaton by pruning or merging
 reduce: $(EXE)/reduce.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
 $(EXE)/reduce.o: $(EXE)/reduce.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
-# simple minimization
 lmin: $(EXE)/lmin.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
 $(EXE)/lmin.o: $(EXE)/lmin.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
-
-# n-grams in traffic
-par_test: $(EXE)/par_test.o $(OBJ)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
-
-$(EXE)/par_test.o: $(EXE)/par_test.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
 # merging inspired by predicate logic
