@@ -19,7 +19,7 @@ vector<map<State, unsigned long>> divide(const Nfa &nfa, string pcap)
     auto state_map = m.get_reversed_state_map();
     vector<size_t> state_freq(nfa.state_count());
     int cnt = 0;
-    int prev = 1000;
+    int prev = 50;
 
     pcapreader::process_payload(
         pcap.c_str(),
@@ -27,7 +27,7 @@ vector<map<State, unsigned long>> divide(const Nfa &nfa, string pcap)
         {
             m.label_states(state_freq, payload, len);
             cnt++;
-            if (cnt < prev) {
+            if (cnt >= prev) {
                 map<State, unsigned long> freq;
                 for (unsigned long i = 0; i < nfa.state_count(); i++)
                     freq[state_map[i]] = state_freq[i];
@@ -35,6 +35,13 @@ vector<map<State, unsigned long>> divide(const Nfa &nfa, string pcap)
                 prev *= 2;
             }
         });
+
+    if (cnt != prev) {
+        map<State, unsigned long> freq;
+        for (unsigned long i = 0; i < nfa.state_count(); i++)
+            freq[state_map[i]] = state_freq[i];
+        res.push_back(freq);
+    }
 
     return res;
 }
@@ -53,7 +60,8 @@ int main(int argc, char **argv) {
             Nfa reduced(target);
             prune(reduced, i, 0.18);
             NfaArray reduced_a(reduced);
-            auto stats = compute_nfa_stats(target_a, reduced_a, vector<string>{argv[3]})[0].second;
+            auto stats = compute_nfa_stats(target_a, reduced_a,
+                vector<string>{argv[3]})[0].second;
             float accuracy = 1.0 - stats.fp_c * 1.0 / stats.total;
             float precision = stats.pp_c * 1.0 / (stats.pp_c + stats.fp_c);
             size_t samples = i[target.get_initial_state()];
