@@ -39,6 +39,12 @@ lmin: $(EXE)/lmin.o $(OBJ)
 $(EXE)/lmin.o: $(EXE)/lmin.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
+learning_curve: $(EXE)/learning_curve.o $(OBJ)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
+
+$(EXE)/learning_curve.o: $(EXE)/learning_curve.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
+
 # merging inspired by predicate logic
 state_merge_mc: $(EXE)/state_merge_mc.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)

@@ -40,7 +40,7 @@ def main():
     # place where reduced NFAs will be stored
     RED_DIR = 'experiments/nfa'
     # executables
-    ERROR = './nfa_error'
+    ERROR = './nfa_eval'
     REDUCE = './reduce'
 
     parser = argparse.ArgumentParser()
@@ -101,8 +101,8 @@ def main():
                 idx += 1
 
             # reduction
-            prog = ' '.join(
-                [REDUCE, target, train_data, '-r', r, '-i', it, '-o', reduced])
+            prog = ' '.join([REDUCE, target, train_data, '-r', r, '-i', it,
+                '-o', reduced])
             call(prog)
 
             _, Rstates, _, Rtransitions = Nfa.nfa_size(reduced)
@@ -116,7 +116,7 @@ def main():
             results_reduction.append(o)
 
             # error
-            prog = ' '.join([ERROR, target, reduced, '-n', nw, test_data])
+            prog = ' '.join([ERROR, target, reduced, '-n', nw, test_data,'-c'])
             o = call(prog)
             o = o.decode("utf-8")
             results_error.append(o)

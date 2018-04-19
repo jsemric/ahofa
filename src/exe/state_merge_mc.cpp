@@ -8,7 +8,7 @@
 using namespace reduction;
 using namespace std;
 
-vector<vector<size_t>> label_with_prefix(const FastNfa &nfa, string pcap)
+vector<vector<size_t>> label_with_prefix(const NfaArray &nfa, string pcap)
 {
     // each state marked with prefix
     vector<vector<size_t>> state_labels(nfa.state_count());
@@ -45,7 +45,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    FastNfa nfa;
+    NfaArray nfa;
     nfa.read_from_file(argv[1]);
     auto state_labels = label_with_prefix(nfa, argv[2]);
 

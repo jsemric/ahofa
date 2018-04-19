@@ -60,7 +60,7 @@ struct NfaStats
 };
 
 vector<pair<string,NfaStats>> compute_nfa_stats(
-    const FastNfa &target, const FastNfa &reduced, const vector<string> &pcaps,
-    bool consistent = false);
+    const NfaArray &target, const NfaArray &reduced,
+    const vector<string> &pcaps, bool consistent = false);
 
 }

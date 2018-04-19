@@ -47,9 +47,10 @@ map<State, unsigned long> read_state_freq(const Nfa &nfa, const string &fname)
 }
 
 map<State, unsigned long> compute_freq(
-    const FastNfa &nfa, pcap_t *pcap, size_t count)
+    const Nfa &nfa, pcap_t *pcap, size_t count)
 {
     map<State, unsigned long> freq;
+    NfaArray m(nfa);
 
     vector<size_t> state_freq(nfa.state_count());
 
@@ -57,11 +58,11 @@ map<State, unsigned long> compute_freq(
         pcap,
         [&] (const unsigned char *payload, unsigned len)
         {
-            nfa.label_states(state_freq, payload, len);
+            m.label_states(state_freq, payload, len);
         }, count);
 
     // remap frequencies
-    auto state_map = nfa.get_reversed_state_map();
+    auto state_map = m.get_reversed_state_map();
     for (unsigned long i = 0; i < nfa.state_count(); i++)
     {
         freq[state_map[i]] = state_freq[i];
@@ -71,7 +72,7 @@ map<State, unsigned long> compute_freq(
 }
 
 map<State, unsigned long> compute_freq(
-    const FastNfa &nfa, string fname, size_t count)
+    const Nfa &nfa, string fname, size_t count)
 {
     char err_buf[4096] = "";
     pcap_t *pcap;
@@ -81,6 +82,7 @@ map<State, unsigned long> compute_freq(
     return compute_freq(nfa, pcap, count);
 }
 
+/// TODO comment
 float prune(
     Nfa &nfa, const map<State, unsigned long> &state_freq, float pct)
 {
@@ -160,6 +162,8 @@ float prune(
         throw out_of_range(errmsg);
     }
 }
+
+/// TODO comment
 int merge(
     Nfa &nfa, const map<State, unsigned long> &state_freq, float threshold,
     float max_freq)
@@ -241,7 +245,7 @@ int merge(
     return cnt_merged;    
 }
 
-void display_heatmap(const FastNfa &nfa, map<State,size_t> &freq)
+void display_heatmap(const Nfa &nfa, map<State,size_t> &freq)
 {
     ofstream out1{"freq.txt"};
     for (auto i : freq)
@@ -258,8 +262,9 @@ void display_heatmap(const FastNfa &nfa, map<State,size_t> &freq)
     }
 }
 
+/// TODO comment
 pair<float,size_t> reduce(
-    FastNfa &nfa, const string &samples, float pct, float th,
+    Nfa &nfa, const string &samples, float pct, float th,
     size_t iterations, bool pre, float max_freq)
 {
     assert((pct > 0 && pct <= 1) || pct == -1);
@@ -311,7 +316,6 @@ pair<float,size_t> reduce(
             
             // compute % reduction in each turn
             merged += merge(nfa, state_freq, th, max_freq);
-            nfa.build();
 
             #if 0
             cerr << "Merged: " << merged << endl;

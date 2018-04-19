@@ -76,7 +76,6 @@ int main(int argc, char **argv)
     unsigned nworkers = 1;
     bool consistent = false, csv = false;
 
-    FastNfa target, reduced;
     string nfa_str1, nfa_str2;
 
     int opt_cnt = 1;    // program name
@@ -124,10 +123,9 @@ int main(int argc, char **argv)
 
         // get automata
         nfa_str1 = argv[opt_cnt];
-        target.read_from_file(nfa_str1.c_str());
+        NfaArray target(Nfa::read_from_file(nfa_str1));
         nfa_str2 = argv[opt_cnt + 1];
-        reduced.read_from_file(nfa_str2.c_str());
-
+        NfaArray reduced(Nfa::read_from_file(nfa_str2));
         // get capture files
         for (int i = opt_cnt + 2; i < argc; i++)
             pcaps.push_back(argv[i]);

@@ -21,8 +21,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     try {
-        FastNfa nfa;
-        nfa.read_from_file(argv[1]);
+        Nfa nfa = Nfa::read_from_file(string(argv[1]));
         nfa.merge_sl_states();
 
         ofstream out{argv[2]};

@@ -111,9 +111,7 @@ int main(int argc, char **argv)
         string nfa_str = argv[opt_cnt];
         string pcap = argv[opt_cnt + 1];
 
-        FastNfa nfa;
-        nfa.read_from_file(nfa_str.c_str());
-        auto state_map = nfa.get_reversed_state_map();
+        Nfa nfa = Nfa::read_from_file(nfa_str);
 
         ofstream out{outfile};
         if (!out.is_open())

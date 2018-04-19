@@ -13,14 +13,17 @@ namespace reduction {
 
 using namespace std;
 
-map<State, unsigned long> compute_freq(
-    const FastNfa &nfa, string fname, size_t count = ~0ULL);
+float prune(
+    Nfa &nfa, const map<State, unsigned long> &state_freq, float pct);
 
 map<State, unsigned long> compute_freq(
-    const FastNfa &nfa, pcap_t *pcap, size_t count = ~0ULL);
+    const Nfa &nfa, string fname, size_t count = ~0ULL);
+
+map<State, unsigned long> compute_freq(
+    const Nfa &nfa, pcap_t *pcap, size_t count = ~0ULL);
 
 pair<float,size_t> reduce(
-    FastNfa &nfa, const string &samples, float pct = -1, float th = 0.995,
+    Nfa &nfa, const string &samples, float pct = -1, float th = 0.995,
     size_t iterations = 0, bool pre = false, float max_freq = 0.1);
 
 int merge(

@@ -13,8 +13,9 @@
 namespace reduction
 {
 
+/// TODO comment
 vector<pair<string,NfaStats>> compute_nfa_stats(
-    const FastNfa &target, const FastNfa &reduced, const vector<string> &pcaps,
+    const NfaArray &target, const NfaArray &reduced, const vector<string> &pcaps,
     bool consistent)
 {
     for (auto i : pcaps) {
@@ -41,9 +42,10 @@ vector<pair<string,NfaStats>> compute_nfa_stats(
                     // bit vector of reached states
                     // 0 - not reached, 1 - reached
                     vector<bool> bm(reduced.state_count());
+                    //cerr << "8\n";
                     reduced.parse_word(
                         payload, len, [&bm](State s){ bm[s] = 1; });
-
+                    //cerr << "10\n";
                     int match1 = 0;
                     stats.total++;
                     for (size_t i = 0; i < fidx_reduced.size(); i++) {
@@ -55,7 +57,6 @@ vector<pair<string,NfaStats>> compute_nfa_stats(
                         }
                     }
 
-                    //stats. += match1 > 0;
                     int match2 = 0;
                     if (match1 || consistent) {
                         // something was matched, lets find the difference
@@ -98,7 +99,7 @@ vector<pair<string,NfaStats>> compute_nfa_stats(
         }
         catch (exception &e) {
             // other error
-            cerr << "\033[1;31mERROR\033[0m " << e.what() << "\n";
+            cerr << "Error while computing NFA stats: " << e.what() << "\n";
             break;
         }
     }
