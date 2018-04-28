@@ -49,7 +49,8 @@ pcap_t* process_payload(pcap_t *pcap, F func, unsigned long count = ~0UL);
 
 /// Generic function for processing packet payload.
 ///
-/// @tparam F lambda function which manipulates with packet payload
+/// @param capturefile filename of PCAP file
+/// @param func lambda function which manipulates with packet payload
 /// @param count Total number of processed packets, which includes some 
 /// payload data.
 template<typename F>
@@ -67,6 +68,12 @@ pcap_t* process_payload(const char* capturefile, F func, unsigned long count)
     return process_payload(pcap, func, count);
 }
 
+/// Generic function for processing packet payload.
+///
+/// @param pcap PCAP file pointer
+/// @param func lambda function which manipulates with packet payload
+/// @param count Total number of processed packets, which includes some 
+/// payload data.
 template<typename F>
 pcap_t* process_payload(pcap_t *pcap, F func, unsigned long count)
 {
@@ -94,6 +101,7 @@ pcap_t* process_payload(pcap_t *pcap, F func, unsigned long count)
     }
 }
 
+/// Extract payload from packet
 inline const unsigned char *get_payload(
     const unsigned char *packet,
     const struct pcap_pkthdr *header)

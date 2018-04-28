@@ -29,4 +29,5 @@ pair<float,size_t> reduce(
 int merge(
     Nfa &nfa, const map<State, unsigned long> &state_freq, float threshold,
     float max_freq);
+
 } // end of namespace

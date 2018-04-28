@@ -323,7 +323,7 @@ class Nfa:
 
     def write_dot(
         self, *, show_trans=False, freq=None, states=None, show_diff=False,
-        freq_scale=None):
+        freq_scale=None,state_labels=True):
 
         succ = self.succ
 
@@ -352,8 +352,12 @@ class Nfa:
                     shape = 'circle'
                 r,g,b = rgb(_max, _min, heatmap[state])
                 color = "#%0.2X%0.2X%0.2X" % (r, g, b)
-                yield 'node [shape={},style=filled,fillcolor="{}",label="{}"];'\
-                    'q{}\n'.format(shape, color, freq[state],state)
+                if state_labels:
+                    yield 'node [shape={},style=filled,fillcolor="{}",label='\
+                        '"{}"];q{}\n'.format(shape, color, freq[state],state)
+                else:
+                    yield 'node [shape={},style=filled,fillcolor="{}"'\
+                        '];q{}\n'.format(shape, color, state)
         else:
             yield '{node [shape = doublecircle, style=filled, fillcolor=red];'
             yield ';'.join(['q' + str(qf) for qf in self._final_states & states]) + '\n'

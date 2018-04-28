@@ -13,7 +13,13 @@
 namespace reduction
 {
 
-/// TODO comment
+/// Computes statistics of the reduced automaton.
+/// @param target original automaton
+/// @param reduced reduced automaton (has to be over-approximation of target!)
+/// @param pcaps filenames of PCAP files
+/// @param consistent if set, check whether reduced is over-approximation
+/// @return  vector of pairs, where the first item is the PCAP file and the
+/// second item is statistic of reduced automaton over this file
 vector<pair<string,NfaStats>> compute_nfa_stats(
     const NfaArray &target, const NfaArray &reduced, const vector<string> &pcaps,
     bool consistent)

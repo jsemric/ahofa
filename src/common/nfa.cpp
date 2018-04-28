@@ -154,7 +154,10 @@ set<State> Nfa::get_states() const
     return ret;
 }
 
-/// TODO comment
+/// Merging of NFA states.
+/// @param mapping A map denoting which state is merged to which one. The
+/// key is mapped to map value. The map should not contain any cycles, otherwise
+/// undefined behavior is expected.
 void Nfa::merge_states(const map<State,State> &mapping)
 {
     // verify mapping
@@ -209,7 +212,8 @@ void Nfa::merge_states(const map<State,State> &mapping)
     clear_final_state_selfloop();
 }
 
-/// TODO comment
+/// Mark each state with final state which can be reached the marked state.
+/// @return a map mapping state to final state
 map<State,State> Nfa::split_to_rules() const
 {
     set<State> visited{initial_state};
@@ -337,7 +341,8 @@ map<State,unsigned> Nfa::state_depth() const
     return ret;
 }
 
-/// TODO comment
+/// Merge states which are successors of an initial state and have self-loop
+/// over whole alphabet
 void Nfa::merge_sl_states()
 {
     map<State,State> mapping;
@@ -393,7 +398,8 @@ NfaArray::NfaArray(const NfaArray &nfa) : NfaArray{static_cast<Nfa>(nfa)}
 {
 }
 
-/// TODO comment
+/// Compute indexes mapped to the states labels of original NFA.
+/// @return mapping of indexes mapped to the states labels
 map<State,State> NfaArray::get_reversed_state_map() const
 {
     map<State,State> ret;
@@ -404,7 +410,8 @@ map<State,State> NfaArray::get_reversed_state_map() const
     return ret;
 }
 
-/// TODO comment
+/// Compute indexes of final states mapped to the states labels of original NFA.
+/// @return mapping of indexes of final states mapped to the states labels
 vector<State> NfaArray::get_final_state_idx() const
 {
     vector<State> ret;
@@ -415,7 +422,10 @@ vector<State> NfaArray::get_final_state_idx() const
     return ret;
 }
 
-/// TODO comment
+/// Computes packet frequency over a giver string (payload).
+/// @param state_freq mapping of indexes to state packet frequency
+/// @param payload string data
+/// @param len the length of payload
 void NfaArray::label_states(
     vector<size_t> &state_freq, const unsigned char *payload,
     unsigned len) const

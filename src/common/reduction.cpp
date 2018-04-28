@@ -58,7 +58,8 @@ map<State, unsigned long> compute_freq(
         pcap,
         [&] (const unsigned char *payload, unsigned len)
         {
-            m.label_states(state_freq, payload, len);
+            if (!m.accept(payload,len))
+                m.label_states(state_freq, payload, len);
         }, count);
 
     // remap frequencies
@@ -82,7 +83,12 @@ map<State, unsigned long> compute_freq(
     return compute_freq(nfa, pcap, count);
 }
 
-/// TODO comment
+/// NFA pruning state reduction.
+/// @param nfa automaton to reduce
+/// @param state_freq mapping of state to its packet frequency
+/// @param pct reduction ratio
+/// @return sum of frequencies of pruned states divided by maximal state
+/// frequency
 float prune(
     Nfa &nfa, const map<State, unsigned long> &state_freq, float pct)
 {
@@ -122,7 +128,7 @@ float prune(
                 return  _x == _y ? depth.at(x) > depth.at(y) : _x < _y;
             });
 
-        float error = 0;
+        float res = 0;
         size_t state_count = nfa.state_count();
         size_t removed = 0;
         size_t to_remove = (1 - pct) * state_count;
@@ -130,13 +136,14 @@ float prune(
         if (pct == -1)
         {
             // magic constant 0.001
-            // error is quite inaccurate, sometimes it may deviate by 10 times
-            while (error < 0.001)
+            // error computed this way is inaccurate
+            // sometimes it may deviate by 10 times
+            while (res < 0.001)
             {
                 State state = sorted_states[removed];
                 merge_map[state] = rule_map[state];
                 removed++;
-                error += (1.0 * state_freq.at(state)) / total;
+                res += (1.0 * state_freq.at(state)) / total;
             }
         }
         else
@@ -146,13 +153,13 @@ float prune(
                 State state = sorted_states[removed];
                 merge_map[state] = rule_map[state];
                 removed++;
-                error += (1.0 * state_freq.at(state)) / total;
+                res += (1.0 * state_freq.at(state)) / total;
             }
         }
 
         nfa.merge_states(merge_map);
 
-        return error;
+        return res;
     }
     catch (out_of_range &e)
     {
@@ -163,7 +170,13 @@ float prune(
     }
 }
 
-/// TODO comment
+/// NFA state merging reduction.
+/// @param nfa automaton to reduce
+/// @param state_freq mapping of state to its packet frequency
+/// @param threshold minimal state frequency difference for two states to be
+/// merged
+/// @param max_freq the maximal of stated allowed to be merged
+/// @return number of merged states
 int merge(
     Nfa &nfa, const map<State, unsigned long> &state_freq, float threshold,
     float max_freq)
@@ -262,7 +275,18 @@ void display_heatmap(const Nfa &nfa, map<State,size_t> &freq)
     }
 }
 
-/// TODO comment
+/// NFA iterative state merging reduction with pruning.
+/// @param nfa automaton to reduce
+/// @param samples PCAP or state frequency file
+/// @param pct reduction ratio
+/// @param th minimal state frequency difference for two states to be merged
+/// @param iteration the number of states merging steps
+/// @param pre if set, denotes that samples contains a filename of file with
+/// state frequencies not packets
+/// @param max_freq the maximal of stated allowed to be merged
+/// @return pair where the first item is a sum of frequencies of pruned states 
+/// divided by maximal state frequency, whilst the second item is the number of
+/// merged states
 pair<float,size_t> reduce(
     Nfa &nfa, const string &samples, float pct, float th,
     size_t iterations, bool pre, float max_freq)
