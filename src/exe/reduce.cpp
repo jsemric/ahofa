@@ -133,10 +133,10 @@ int main(int argc, char **argv)
             auto res = reduce(nfa, pcap, rratio, threshold, iter, pre, max_fr);
             auto new_sc = nfa.state_count();
 
-            cerr << "Reduction: " << new_sc << "/" << old_sc
+            cerr << "Reduction Rate: " << new_sc << "/" << old_sc
                 << " " << 100 * new_sc / old_sc << "%\n";
-            cerr << "Packet Error: " << res.first << endl;
-            cerr << "Merged: " << res.second << endl;
+            cerr << "Removed Packet Frequency: " << res.first << endl;
+            cerr << "Merged States: " << res.second << endl;
             nfa.print(out);
         }
 

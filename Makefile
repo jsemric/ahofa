@@ -54,8 +54,9 @@ no-data:
 	rm -f obs* tmp* *.fsm *.fa *.pa *.ba *csv
 
 pack:
-	zip -r xsemri00.zip src/exe/*.cpp src/common/*.{hpp,cpp} Makefile nfa.py \
-	get_nfa_size.py draw_nfa.py rabit.py dfa_min.py README.md
+	rm -f xsemri00.zip
+	zip -r xsemri00.zip src/*/*.hpp src/*/*.cpp Makefile nfa.py \
+	get_nfa_size.py draw_nfa.py rabit.py dfa_min.py README.md examples
 
 clean:
 	rm -f $(COMMON)/*.o $(EXE)/*.o $(PROG)
