@@ -58,13 +58,13 @@ Pruning reduction to 20% of original size.
 ```
 Merging reduction to 20% of original size.
 ```
-./reduce examples/original-nfa/backdoor.rules.fa examples/pcaps/darpa-1998-training-week1-friday.pcap.part -r 0.2 -i 1
+./reduce examples/original-nfa/backdoor.rules.fa examples/pcaps/darpa-1998-training-week1-friday.pcap.part -r 0.2 -i 1 -o backdoor.rules-reduced.fa
 ```
 Computing packet frequency.
 ```
-./reduce examples/original-nfa/backdoor.rules.fa examples/pcaps/darpa-1998-training-week1-friday.pcap.part -f
+./reduce examples/original-nfa/web-php.rules.fa examples/pcaps/darpa-1998-training-week1-friday.pcap.part -f
 ```
 Reduced NFA evaluation.
 ```
-./reduce examples/original-nfa/backdoor.rules.fa backdoor.rules-reduced.fa examples/pcaps/* -n 2
+./nfa_eval examples/original-nfa/backdoor.rules.fa backdoor.rules-reduced.fa examples/pcaps/* -n 2
 ```
