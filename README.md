@@ -54,18 +54,15 @@ DFA minimization.
 ### Examples
 Pruning reduction to 20% of original size.
 ```
-./reduce examples/original-nfa/web-php.rules.fa examples/pcaps/darpa-1998-training-week1-friday.pcap.part
- -r 0.2
+./reduce examples/original-nfa/web-php.rules.fa examples/pcaps/darpa-1998-training-week1-friday.pcap.part -r 0.2
 ```
 Merging reduction to 20% of original size.
 ```
-./reduce examples/original-nfa/backdoor.rules.fa examples/pcaps/darpa-1998-training-week1-friday.pcap.part
- -r 0.2 -i 1
+./reduce examples/original-nfa/backdoor.rules.fa examples/pcaps/darpa-1998-training-week1-friday.pcap.part -r 0.2 -i 1
 ```
 Computing packet frequency.
 ```
-./reduce examples/original-nfa/backdoor.rules.fa examples/pcaps/darpa-1998-training-week1-friday.pcap.part
- -f
+./reduce examples/original-nfa/backdoor.rules.fa examples/pcaps/darpa-1998-training-week1-friday.pcap.part -f
 ```
 Reduced NFA evaluation.
 ```
