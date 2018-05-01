@@ -58,8 +58,8 @@ map<State, unsigned long> compute_freq(
         pcap,
         [&] (const unsigned char *payload, unsigned len)
         {
-            if (!m.accept(payload,len))
-                m.label_states(state_freq, payload, len);
+            //if (!m.accept(payload,len))
+            m.label_states(state_freq, payload, len);
         }, count);
 
     // remap frequencies
