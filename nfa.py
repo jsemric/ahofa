@@ -464,7 +464,7 @@ class Nfa:
         return o.decode("utf-8")
         
 
-    def get_freq(self, fname=None, freq_file=False):
+    def get_freq(self, fname=None, freq_file=False, subtract=False):
         if fname == None:
             freq = {s:0 for s in self.states}
         elif freq_file:

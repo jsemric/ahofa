@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import networkx
 from nfa import Nfa
 
 def prunning(aut, ratio=.25, *, freq):
@@ -32,6 +33,7 @@ def merging(aut, *, th=.995, max_fr=.1, freq=None):
     finals = aut._final_states
 
     mapping = {}
+    marked = []
     max_ = max_fr * max(freq.values())
     # BFS
     while actual:
@@ -40,17 +42,22 @@ def merging(aut, *, th=.995, max_fr=.1, freq=None):
             freq_p = freq[p]
             t = freq_p / max_
             if not p in finals and freq_p != 0 and t < max_fr:
-                for q in succ[p] - finals - visited:
-                    d = freq[q] / freq_p
-                    if d > th:
-                        if p in mapping:
-                            mapping[q] = mapping[p]
-                        else:
-                            mapping[q] = p
+                for q in succ[p] - finals - set([p]):
+                    freq_q = freq[q]
+                    d = min(freq_q,freq_p) / max(freq_q,freq_p)
+                    if d > th: marked.append((p,q))
+
             new |= succ[p]
         actual = new - visited
         visited |= new
-
+    
+    # handle transitivity
+    g = networkx.Graph(marked)
+    for cluster in networkx.connected_component_subgraphs(g):
+        l = list(cluster.nodes())
+        assert len(l) > 1
+        for i in l[1:]: mapping[i] = l[0]
+    
     aut.merge_states(mapping)
-    # return the number of merged states
+    # return the number of merged (removed) states
     return len(mapping)

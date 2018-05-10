@@ -24,7 +24,7 @@ def main():
         help='threshold for merging', default=.995)
     parser.add_argument('-mf','--maxfr', type=float, default=.1,
         help='max frequency of a state allowed to be merged')
-    parser.add_argument('-o','--output', type=str,)
+    parser.add_argument('-o','--output', type=str,default='output.fa')
     args = parser.parse_args()
 
     if args.merge and not args.train:
@@ -39,18 +39,12 @@ def main():
     if args.merge:
         sys.stderr.write('Merged: ' + str(m) + '\n')
 
-    if args.output:
-        with open(args.output,'w') as f:
-            aut.print(f)
-    else:
-        aut.print()
+    with open(args.output,'w') as f:
+        aut.print(f)
 
     if args.test:
-        if args.output:
-            reduced = args.output
-        else:
-            reduced = tempfile.NamedTemporaryFile().name
-        r = Nfa.eval_accuracy(args.input, reduced, args.test, nw=args.nw)
+        reduced = args.output
+        r = Nfa.eval_accuracy(args.input, args.output, args.test, nw=args.nw)
         _,_,total, _, _, fp, tp = r.split(',')
         total, fp, tp = int(total), int(fp), int(tp)
         print('error:', round(fp/total,4))
