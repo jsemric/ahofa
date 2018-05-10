@@ -11,7 +11,7 @@ def prunning(aut, ratio=.25, *, freq):
     states = sorted(states, key=lambda x: (freq[x], -depth[x]), reverse=True)
 
     orig_cnt = aut.state_count
-    cnt = round(ratio * orig_cnt) - len(aut._final_states) - 1
+    cnt = int(round(ratio * orig_cnt) - len(aut._final_states) - 1)
     assert cnt > 1
     fin = {}
 
