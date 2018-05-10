@@ -15,9 +15,7 @@ def prunning(aut, ratio=.25, *, freq):
     assert cnt > 1
     fin = {}
 
-    for f,ss in aut.fin_pred().items():
-        for s in ss:
-            fin[s] = f
+    fin = {s:f for f,ss in aut.fin_pred().items() for s in ss}
     mapping = {s:fin[s] for s in states[cnt:]}
     
     aut.merge_states(mapping)

@@ -464,14 +464,17 @@ class Nfa:
         return o.decode("utf-8")
         
 
-    def get_freq(self, fname=None, freq_file=False, subtraction=False):
+    def get_freq(self, fname=None, freq_file=False):
         if fname == None:
             freq = {s:0 for s in self.states}
         elif freq_file:
             freq = self.retrieve_freq(fname)
         else:
             freq = self.compute_freq(fname)
-        if subtraction:
-            # TODO
-            pass
+
+        if subtract:
+            for f,ss in self.fin_pred().items():
+                for s in ss:
+                    freq[s] =  max(freq[s] - freq[f], 0)
+
         return freq

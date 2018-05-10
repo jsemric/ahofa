@@ -6,12 +6,9 @@ import argparse
 import multiprocessing
 
 from nfa import Nfa
-from reduce_eval import reduce_nfa  
+from reduction_eval import reduce_nfa  
 
 def main():
-    #reduce_eval('automata/sprobe.fa', test=['pcaps/*k.pcap'],
-    #    train='pcaps/10k.pcap', ratios=[.18,.2], merge=True,nw=3)
-
     parser = argparse.ArgumentParser()
     parser.add_argument('-r','--ratio', metavar='N', type=float,
         default=.2, help='reduction ratio')
@@ -35,11 +32,12 @@ def main():
         exit(1)
 
     aut = Nfa.parse(args.input)
-    freq = None
-
-    aut, m = reduce_nfa(aut, aut.get_freq(args.train), args.ratio, args.merge,
-        args.thresh, args.maxfr)
-    sys.stderr.write('Merged: ' + str(m) + '\n')
+    freq = aut.get_freq(args.train,subtract=1) 
+    sys.stderr.write('Reduction ratio: ' + str(args.ratio) + '\n')
+    aut, m = reduce_nfa(aut, freq, args.ratio, args.merge, args.thresh,
+        args.maxfr)
+    if args.merge:
+        sys.stderr.write('Merged: ' + str(m) + '\n')
 
     if args.output:
         with open(args.output,'w') as f:
@@ -53,10 +51,10 @@ def main():
         else:
             reduced = tempfile.NamedTemporaryFile().name
         r = Nfa.eval_accuracy(args.input, reduced, args.test, nw=args.nw)
-        _,_,total, _, _, fp, tp, _ = r.split(',')
+        _,_,total, _, _, fp, tp = r.split(',')
         total, fp, tp = int(total), int(fp), int(tp)
-        print('error:',fp/total)
-        print('precision:',tp/(fp+tp))
+        print('error:', round(fp/total,4))
+        print('precision:', round(tp/(fp+tp),4))
 
 if __name__ == '__main__':
     main()

@@ -7,7 +7,7 @@ import itertools
 from glob import glob
 from copy import deepcopy
 
-from reduce import prunning, merging
+from reduction import prunning, merging
 from nfa import Nfa
 
 def check_file(fname, dir=False):

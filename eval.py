@@ -6,7 +6,7 @@ from reduce_eval import reduce_eval
 
 def main():
     test = ['pcaps/geant.pcap*', 'pcaps/meter4-1*']
-    train = ['pcaps/geant2.pcap']
+    train = 'pcaps/geant2.pcap'
     nw = 14
     
     ratios = np.arange(.14, 0.32, .02)
