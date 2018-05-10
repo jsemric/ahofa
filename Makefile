@@ -12,7 +12,7 @@ EXE=$(SRCDIR)/exe
 CXXFLAGS=$(STD) -Wall -Wextra -pedantic  -I $(COMMON) -O3 #-Wfatal-errors #-DNDEBUG
 LIBS=-lpcap -lpthread -lboost_system -lboost_filesystem
 
-PROG=nfa_eval lmin reduce
+PROG=nfa_eval lmin fr
 all: $(PROG)
 
 SRC=$(wildcard $(COMMON)/*.cpp)
@@ -27,10 +27,10 @@ nfa_eval: $(EXE)/nfa_eval.o $(OBJ)
 $(EXE)/nfa_eval.o: $(EXE)/nfa_eval.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
-reduce: $(EXE)/reduce.o $(OBJ)
+fr: $(EXE)/fr.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
-$(EXE)/reduce.o: $(EXE)/reduce.cpp
+$(EXE)/fr.o: $(EXE)/fr.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
 lmin: $(EXE)/lmin.o $(OBJ)

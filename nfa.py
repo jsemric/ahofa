@@ -4,6 +4,9 @@ import re
 import math
 import sys
 from collections import defaultdict
+import subprocess as subpr
+import os
+import tempfile
 
 def rgb(maximum, minimum, value):
     minimum, maximum = float(minimum), float(maximum)
@@ -92,6 +95,11 @@ class Nfa:
     @property
     def state_count(self):
         return len(self._transitions)
+
+    @property
+    def trans_count(self):
+        return sum(len(ss) for t in self._transitions.values() \
+            for ss in t.values())
 
     @property
     def states(self):
@@ -210,7 +218,7 @@ class Nfa:
         # remove old final state
         del self._transitions[final_state]
 
-    def split_to_rules(self):
+    def fin_pred(self):
         res = dict()
         pred = self.pred
         for f in self._final_states:
@@ -393,3 +401,77 @@ class Nfa:
     def print_dot(self, f=None):
         for line in self.write_dot():
             print(line, end='', file=f)
+
+
+    ###########################################################################
+    # REDUCTION
+    ###########################################################################
+
+    def merge_states(self, mapping):
+        
+        if set(mapping.keys()) & set(mapping.values()):
+            raise RuntimeError('merging not consistent')
+
+        states = set(self.states)
+
+        for p,q in mapping.items():
+            if not p in states or not q in states:
+                raise RuntimeError('invalid state id')
+            if p == self._initial_state:
+                raise RuntimeError('cannot merge initial state')
+
+            for a,ss in self._transitions[p].items():
+                self._transitions[q][a] |= ss
+            del self._transitions[p]
+            if p in self._final_states:
+                self._final_states.add(q)
+
+        for s,t  in self._transitions.copy().items():
+            for a,ss in t.items():
+                self._transitions[s][a] = set(
+                    mapping[x] if x in mapping else x for x in ss)
+
+        self._final_states -= set(mapping.keys())
+
+
+    def compute_freq(self, pcap):
+        fa_file = tempfile.NamedTemporaryFile()
+        fr_file = tempfile.NamedTemporaryFile()
+        with open(fa_file.name, 'w') as f:
+            self.print(f)
+        subpr.call(['./fr', fa_file.name, pcap, fr_file.name])
+        return self.retrieve_freq(fr_file.name)
+
+    def retrieve_freq(self, fname):
+        freq = {}
+        with open(fname, 'r') as f:
+            for line in f:
+                line = line.split('#')[0]
+                if line:
+                    state, fr, *_ = line.split()
+                    freq[int(state)] = int(fr)
+
+        if set(freq.keys()) != set(self.states):
+            raise RuntimeError('failed to read state frequencies')
+
+        return freq
+
+    @classmethod
+    def eval_accuracy(cls, target, reduced, pcap, *, nw=1):
+        prog = ' '.join(['./nfa_eval', target, reduced, '-n', str(nw), pcap,
+             '-c']).split()
+        o = subpr.check_output(prog)
+        return o.decode("utf-8")
+        
+
+    def get_freq(self, fname=None, freq_file=False, subtraction=False):
+        if fname == None:
+            freq = {s:0 for s in self.states}
+        elif freq_file:
+            freq = self.retrieve_freq(fname)
+        else:
+            freq = self.compute_freq(fname)
+        if subtraction:
+            # TODO
+            pass
+        return freq

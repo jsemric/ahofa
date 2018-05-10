@@ -48,7 +48,7 @@ void write_nfa_stats(
             out <<  fs::basename(reduced_str)
                 << "," << fs::basename(pcap) + fs::extension(pcap) << ","
                 << d.total << "," <<  d.fp_a << "," << d.pp_a << "," << d.fp_c
-                << "," << d.pp_c << "," << d.all_c << endl;
+                << "," << d.pp_c << /*"," << d.all_c <<*/ endl;
         }
     }
     else {

@@ -41,6 +41,26 @@ void check_float(float x, float max_val = 1, float min_val = 0)
 
 int main(int argc, char **argv)
 {
+    if (argc > 3) {
+        cerr << "Computing packet frequency\n";
+        string nfa_str = argv[1];
+        string pcap = argv[2];
+        Nfa nfa = Nfa::read_from_file(nfa_str);
+        auto freq = compute_freq(nfa, pcap);
+
+        ofstream out{argv[3]};
+        if (!out.is_open())
+        {
+            throw runtime_error("cannot open output file");
+        }
+        for (auto i : freq)
+        {
+            out << i.first << " " << i.second << endl;
+        }
+        out.close();
+    }
+
+    /*
     // options
     bool freq_opt = false;
     float rratio = -1;
@@ -147,6 +167,6 @@ int main(int argc, char **argv)
         cerr << "\033[1;31mERROR\033[0m " << e.what() << endl;
         return 1;
     }
-
+    */
     return 0;
 }
