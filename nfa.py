@@ -439,7 +439,7 @@ class Nfa:
         fr_file = tempfile.NamedTemporaryFile()
         with open(fa_file.name, 'w') as f:
             self.print(f)
-        subpr.call(['./fr', fa_file.name, pcap, fr_file.name])
+        subpr.call(['./state_frequency', fa_file.name, pcap, fr_file.name])
         return self.retrieve_freq(fr_file.name)
 
     def retrieve_freq(self, fname):
