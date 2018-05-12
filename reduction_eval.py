@@ -8,7 +8,7 @@ from glob import glob
 from copy import deepcopy
 import networkx
 
-from reduction import prunning, merging
+from reduction import pruning, merging
 from nfa import Nfa
 
 def check_file(fname, dir=False):
@@ -27,7 +27,7 @@ def reduce_nfa(aut, freq=None, ratio=.25, merge=True, th=.995, mf=.1):
         cnt = aut.state_count
         ratio = ratio * cnt / (cnt - m)
 
-    prunning(aut, ratio, freq=freq)
+    pruning(aut, ratio, freq=freq)
     return aut, m
 
 def armc(aut, pcap, *, ratio=.25, th=.75, prune_empty=True):
@@ -53,7 +53,7 @@ def armc(aut, pcap, *, ratio=.25, th=.75, prune_empty=True):
         freq = aut.get_freq(pcap)
         cnt = aut.state_count
         ratio = ratio * cnt / (cnt - m)
-        prunning(aut, ratio, freq=freq)
+        pruning(aut, ratio, freq=freq)
 
     return m
 

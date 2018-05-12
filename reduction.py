@@ -4,7 +4,7 @@ import networkx
 
 from nfa import Nfa
 
-def prunning(aut, ratio=.25, *, freq):
+def pruning(aut, ratio=.25, *, freq):
     if not 0 < ratio < 1:
         raise RuntimeError('invalid reduction ratio value: ' + str(ratio))
 
