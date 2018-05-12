@@ -82,17 +82,6 @@ class Nfa:
     ###########################################################################
 
     @property
-    def generator(self):
-        ret = set()
-        for s in self.succ[self._initial_state]:
-            if self._has_path_over_alph(s, s):
-                ret.add(s)
-        if len(ret) == 1:
-            return ret.pop()
-        else:
-            return ret
-
-    @property
     def state_count(self):
         return len(self._transitions)
 
@@ -178,7 +167,7 @@ class Nfa:
             for c in range(256):
                 self._transitions[state][c] = set([state])
 
-    def _has_path_over_alph(self, state1, state2):
+    def has_path_over_alph(self, state1, state2):
         alph = [1 for x in range(256)]
         for key, val in self._transitions[state1].items():
             if state2 in val:
@@ -408,7 +397,7 @@ class Nfa:
     ###########################################################################
 
     def merge_states(self, mapping):
-        
+
         if set(mapping.keys()) & set(mapping.values()):
             raise RuntimeError('merging not consistent')
 
@@ -433,6 +422,21 @@ class Nfa:
 
         self._final_states -= set(mapping.keys())
 
+    def merge_redundant_states(self):
+        to_merge = set()
+        pred = self.pred
+
+        for s in self.succ[self._initial_state]:
+            if self.has_path_over_alph(self._initial_state, s) and \
+                self.has_path_over_alph(s,s) and len(pred[s]) == 2:
+                to_merge.add(s)
+
+        to_merge.discard(self._initial_state)
+        if len(to_merge) > 1:
+            print(len(to_merge))
+            p = to_merge.pop()
+            print(len(to_merge))
+            self.merge_states({q:p for q in to_merge})
 
     def compute_freq(self, pcap):
         fa_file = tempfile.NamedTemporaryFile()
@@ -462,7 +466,7 @@ class Nfa:
              '-c']).split()
         o = subpr.check_output(prog)
         return o.decode("utf-8")
-        
+
 
     def get_freq(self, fname=None, freq_file=False, subtract=False):
         if fname == None:

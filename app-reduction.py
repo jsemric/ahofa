@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import sys, os
+import sys
 import tempfile
 import argparse
 import multiprocessing
@@ -28,11 +28,10 @@ def main():
     args = parser.parse_args()
 
     if args.merge and not args.train:
-        sys.stderr.write('Error: --train option is required when merging\n')
-        exit(1)
+        raise SystemError('--train option is required when merging')
 
     aut = Nfa.parse(args.input)
-    freq = aut.get_freq(args.train,subtract=1) 
+    freq = aut.get_freq(args.train) 
     sys.stderr.write('Reduction ratio: ' + str(args.ratio) + '\n')
     aut, m = reduce_nfa(aut, freq, args.ratio, args.merge, args.thresh,
         args.maxfr)

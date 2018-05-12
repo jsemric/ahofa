@@ -8,7 +8,7 @@ def main():
     test = ['pcaps/geant.pcap*', 'pcaps/meter4-1*']
     train = 'pcaps/geant2.pcap'
     nw = 14
-    
+
     ratios = np.arange(.14, 0.32, .02)
     reduce_eval('automata/sprobe.fa', test=test, ratios=ratios, nw=nw)
     reduce_eval('automata/sprobe.fa', test=test, train=train, ratios=ratios,

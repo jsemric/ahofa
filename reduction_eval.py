@@ -79,9 +79,9 @@ def reduce_eval(fa_name, *, test, train=None, ratios, merge=False, ths=[.995],
         reduction_csv.append(o)
 
         # eval error and save result
-        #eval_csv.append(Nfa.eval_accuracy(fa_name, reduced, test_data, nw=nw))
+        eval_csv.append(Nfa.eval_accuracy(fa_name, reduced, test_data, nw=nw))
 
-    #with open(ERR_CSV, 'a') as f:
-    #    for i in eval_csv: f.write(i)
+    with open(ERR_CSV, 'a') as f:
+        for i in eval_csv: f.write(i)
     with open(RED_CSV, 'a') as f:
         for i in reduction_csv: f.write(i + '\n')
