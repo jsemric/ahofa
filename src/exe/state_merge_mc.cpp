@@ -50,6 +50,7 @@ int main(int argc, char **argv)
         th = stod(argv[3]);
     assert(th > 0 && th <= 1);
 
+    cerr << "labeling states with prefixes\n";
     NfaArray nfa(Nfa::read_from_file(argv[1]));
     auto state_labels = label_with_prefix(nfa, argv[2]);
     auto state_map = nfa.get_reversed_state_map();

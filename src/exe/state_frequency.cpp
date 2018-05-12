@@ -52,7 +52,7 @@ int main(int argc, char **argv)
 {
     try{
         if (argc > 3) {
-            cerr << "Computing packet frequency\n";
+            cerr << "computing packet frequency\n";
             string nfa_str = argv[1];
             string pcap = argv[2];
             Nfa nfa = Nfa::read_from_file(nfa_str);

@@ -38,7 +38,9 @@ def main():
     aut = Nfa.parse(args.input)
 
     if args.armc:
-        armc(aut, args.train, args.thresh)
+        m = armc(aut, args.train, ratio=args.ratio, th=args.thresh,
+            prune_empty=0)
+        sys.stderr.write('Merged: ' + str(m) + '\n')
     else:
         sys.stderr.write('Reduction ratio: ' + str(args.ratio) + '\n')
         freq = aut.get_freq(args.train)
@@ -57,7 +59,8 @@ def main():
         _,_,total, _, _, fp, tp = r.split(',')
         total, fp, tp = int(total), int(fp), int(tp)
         print('error:', round(fp/total,4))
-        print('precision:', round(tp/(fp+tp),4))
+        if tp + fp > 0:
+            print('precision:', round(tp/(fp+tp),4))
 
 if __name__ == '__main__':
     main()

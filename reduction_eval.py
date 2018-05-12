@@ -30,14 +30,10 @@ def reduce_nfa(aut, freq=None, ratio=.25, merge=True, th=.995, mf=.1):
     prunning(aut, ratio, freq=freq)
     return aut, m
 
-def armc(aut, pcap, th, prune_empty=True):
+def armc(aut, pcap, *, ratio=.25, th=.75, prune_empty=True):
     empty, eq = aut.get_armc_groups(pcap, th)
     
     mapping = {}
-    if prune_empty:
-        fin = {s:f for f,ss in aut.fin_pred().items() for s in ss}
-        mapping = {s:fin[s] for s in empty if not s in aut._final_states}
-
     # merge similar
     g = networkx.Graph(eq)
     for cluster in networkx.connected_component_subgraphs(g):
@@ -45,8 +41,21 @@ def armc(aut, pcap, th, prune_empty=True):
         assert len(l) > 1
         for i in l[1:]: mapping[i] = l[0]
 
-    del mapping[aut._initial_state]
-    aut.merge_states(mapping)
+    mapping.pop(aut._initial_state, None)
+    m = len(mapping)
+
+    if prune_empty:
+        fin = {s:f for f,ss in aut.fin_pred().items() for s in ss}
+        mapping.update({s:fin[s] for s in empty if not s in aut._final_states})
+        aut.merge_states(mapping)
+    else:
+        aut.merge_states(mapping)
+        freq = aut.get_freq(pcap)
+        cnt = aut.state_count
+        ratio = ratio * cnt / (cnt - m)
+        prunning(aut, ratio, freq=freq)
+
+    return m
 
 def reduce_eval(fa_name, *, test, train=None, ratios, merge=False, ths=[.995],
     mfs=[.1], nw=1):
