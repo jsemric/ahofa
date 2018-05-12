@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import networkx
+
 from nfa import Nfa
 
 def prunning(aut, ratio=.25, *, freq):

@@ -481,3 +481,17 @@ class Nfa:
                     freq[s] =  max(freq[s] - freq[f], 0)
 
         return freq
+
+    def get_armc_groups(self, pcap, th=.5):
+        fa_file = tempfile.NamedTemporaryFile()
+        with open(fa_file.name, 'w') as f: self.print(f)
+        out = subpr.check_output('./state_merge_mc {} {} {}'.format(
+            fa_file.name, pcap, th).split()).decode('utf-8').split('\n')
+        empty = [int(s) for s in out[0].split()]
+        #print(empty)
+        sim = []
+        for ss in out[1:-1]:
+            p, q = ss.split()
+            sim.append((int(p),int(q)))
+        return empty, sim
+            

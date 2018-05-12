@@ -41,26 +41,34 @@ vector<vector<size_t>> label_with_prefix(const NfaArray &nfa, string pcap)
 int main(int argc, char **argv)
 {
     if (argc < 3) {
-        cerr << "Error: 2 arguments required\n";
+        cerr << "Error: 2 arguments required NFA and PCAP\n";
         return 1;
     }
 
-    NfaArray nfa;
-    nfa.read_from_file(argv[1]);
-    auto state_labels = label_with_prefix(nfa, argv[2]);
+    float th = 0.75;
+    if (argc > 3)
+        th = stod(argv[3]);
+    assert(th > 0 && th <= 1);
 
-    // which states are `similar`
-    map<pair<size_t,size_t>,pair<int,float>> sim_states;
+    NfaArray nfa(Nfa::read_from_file(argv[1]));
+    auto state_labels = label_with_prefix(nfa, argv[2]);
+    auto state_map = nfa.get_reversed_state_map();
+
+    // empty sets eq. group
     for (size_t i = 0; i < state_labels.size(); i++) {
-        float max_pct = 0;
         if (state_labels[i].empty()) {
-            //cout << max_pct << endl;
+            cout << state_map.at(i) << " ";
+        }
+    }
+    cout << endl;
+
+    // eq. pairs wrt the threshold th
+    for (size_t i = 0; i < state_labels.size(); i++) {
+        if (state_labels[i].empty()) {
             continue;
         }
 
-        //for (size_t j = i + 1; j < state_labels.size(); j++) {
-        for (size_t j = 0; j < state_labels.size(); j++) {
-            if (i == j) continue;
+        for (size_t j = i + 1; j < state_labels.size(); j++) {
             // compute the intersection
             // vectors are supposed to be sorted
             vector<size_t> res(state_labels[i].size());
@@ -70,15 +78,13 @@ int main(int argc, char **argv)
             );
             if (it != res.begin()) {
                 int denom = max(state_labels[i].size(), state_labels[j].size());
-                int same = it - res.begin();
-                float pct = same * 100.0 / denom;
-                max_pct = pct > max_pct ? pct : max_pct;
-                //cout << pct << endl;
-                sim_states[pair<size_t,size_t>(i,j)] =
-                    pair<size_t,float>(same, pct);
+                int cnt = it - res.begin();
+                float sim_rate = cnt * 100.0 / denom;
+                if (sim_rate > th) {
+                    cout << state_map.at(i) << " " << state_map.at(j) << endl;
+                }
             }
         }
-        cout << max_pct << endl;
     }
 
     return 0;

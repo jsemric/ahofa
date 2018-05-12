@@ -12,7 +12,7 @@ EXE=$(SRCDIR)/exe
 CXXFLAGS=$(STD) -Wall -Wextra -pedantic  -I $(COMMON) -O3 #-Wfatal-errors #-DNDEBUG
 LIBS=-lpcap -lpthread -lboost_system -lboost_filesystem
 
-PROG=nfa_eval lnfa state_frequency
+PROG=nfa_eval state_frequency state_merge_mc
 all: $(PROG)
 
 SRC=$(wildcard $(COMMON)/*.cpp)
