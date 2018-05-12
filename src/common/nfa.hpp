@@ -69,18 +69,6 @@ public:
     bool is_final(State state) const {
         return final_states.find(state) != final_states.end();
     }
-
-    // helpful functions
-    bool has_selfloop_over_alph(State s) const;
-    map<State,State> split_to_rules() const;
-    map<State,set<State>> pred() const;
-    map<State,set<State>> succ() const;
-    map<State,unsigned> state_depth() const;
-    void merge_sl_states();
-    void clear_final_state_selfloop();
-
-    // essential
-    virtual void merge_states(const map<State,State> &mapping);
 };
 
 /// Faster manipulation with transitions as in NFA class.
@@ -120,12 +108,6 @@ public:
         FuncType2 loop_handler = default_lambda) const;
 
     bool accept(const Word word, unsigned length) const;
-
-private:
-    // do not use
-    using Nfa::merge_states;
-    using Nfa::clear_final_state_selfloop;
-    using Nfa::merge_sl_states;
 };
 
 
