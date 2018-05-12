@@ -485,7 +485,7 @@ class Nfa:
     def get_armc_groups(self, pcap, th=.5):
         fa_file = tempfile.NamedTemporaryFile()
         with open(fa_file.name, 'w') as f: self.print(f)
-        out = subpr.check_output('./state_merge_mc {} {} {}'.format(
+        out = subpr.check_output('./prefix_labeling {} {} {}'.format(
             fa_file.name, pcap, th).split()).decode('utf-8').split('\n')
         empty = [int(s) for s in out[0].split()]
         #print(empty)

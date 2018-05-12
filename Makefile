@@ -12,7 +12,7 @@ EXE=$(SRCDIR)/exe
 CXXFLAGS=$(STD) -Wall -Wextra -pedantic  -I $(COMMON) -O3 #-Wfatal-errors #-DNDEBUG
 LIBS=-lpcap -lpthread -lboost_system -lboost_filesystem
 
-PROG=nfa_eval state_frequency state_merge_mc
+PROG=nfa_eval state_frequency prefix_labeling
 all: $(PROG)
 
 SRC=$(wildcard $(COMMON)/*.cpp)
@@ -34,10 +34,10 @@ $(EXE)/state_frequency.o: $(EXE)/state_frequency.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
 # merging inspired by predicate logic
-state_merge_mc: $(EXE)/state_merge_mc.o $(OBJ)
+prefix_labeling: $(EXE)/prefix_labeling.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
-$(EXE)/state_merge_mc.o: $(EXE)/state_merge_mc.cpp
+$(EXE)/prefix_labeling.o: $(EXE)/prefix_labeling.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
 %.o: %.cpp %.hpp
