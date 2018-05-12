@@ -50,7 +50,7 @@ def main():
 
     states = set(aut.states)
     if args.rules:
-        rules = list(aut.split_to_rules().values())[0:args.rules]
+        rules = list(aut.fin_pred().values())[0:args.rules]
         states = set([s for subl in rules for s in subl])
 
     if args.depth:

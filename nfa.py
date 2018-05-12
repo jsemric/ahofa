@@ -435,7 +435,6 @@ class Nfa:
         if len(to_merge) > 1:
             print(len(to_merge))
             p = to_merge.pop()
-            print(len(to_merge))
             self.merge_states({q:p for q in to_merge})
 
     def compute_freq(self, pcap):

@@ -33,12 +33,6 @@ state_frequency: $(EXE)/state_frequency.o $(OBJ)
 $(EXE)/state_frequency.o: $(EXE)/state_frequency.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
 
-lnfa: $(EXE)/lnfa.o $(OBJ)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
-
-$(EXE)/lnfa.o: $(EXE)/lnfa.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LIBS)
-
 # merging inspired by predicate logic
 state_merge_mc: $(EXE)/state_merge_mc.o $(OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)

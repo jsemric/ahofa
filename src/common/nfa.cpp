@@ -341,34 +341,6 @@ map<State,unsigned> Nfa::state_depth() const
     return ret;
 }
 
-/// Merge states which are successors of an initial state and have self-loop
-/// over whole alphabet
-void Nfa::merge_sl_states()
-{
-    map<State,State> mapping;
-    set<State> s;
-    auto pre = pred();
-    auto suc = succ();
-    for (auto state : suc[initial_state])
-    {
-        if (has_selfloop_over_alph(state) && pre[state].size() == 2)
-        {
-            s.insert(state);
-        }
-    }
-    s.erase(initial_state);
-    State first = initial_state;
-    for (auto i : s) {
-        if (first == initial_state)
-            first = i;
-        else
-            mapping[i] = first;
-    }
-
-    if (!mapping.empty())
-        merge_states(mapping);
-}
-
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 // implementation of NfaArray class methods
 //^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
