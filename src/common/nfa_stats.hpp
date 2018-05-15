@@ -21,10 +21,10 @@ struct NfaStats
     vector<size_t> target_states_arr;
 
     size_t total;   // total packets
-    size_t fp_a;    // false positive acceptance
-    size_t pp_a;    // positive positive acceptance
-    size_t fp_c;    // false positive classification
-    size_t pp_c;    // positive positive classification
+    size_t fp_a;    // accepted false positive
+    size_t pp_a;    // accepted positive positive
+    size_t fp_c;    // classification false positive
+    size_t pp_c;    // classification positive positive
     size_t all_c;   // all additional classifications
 
     NfaStats(size_t data_reduced_size = 1, size_t data_target_size = 1) :

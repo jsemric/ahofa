@@ -1,10 +1,24 @@
 #!/usr/bin/env python3
+# NFA reduction algorithms: pruning and merging
 
 import networkx
 
 from nfa import Nfa
 
 def pruning(aut, ratio=.25, *, freq):
+    '''
+    Pruning NFA reduction (in place).
+
+    Parameters
+    ----------
+    aut : Nfa class
+        the NFA to reduce
+    ratio :
+        reduction ratio
+    freq : str, None
+        PCAP filename, or file with packet frequencies, or None
+    
+    '''
     if not 0 < ratio < 1:
         raise RuntimeError('invalid reduction ratio value: ' + str(ratio))
 
@@ -24,6 +38,25 @@ def pruning(aut, ratio=.25, *, freq):
 
 
 def merging(aut, *, th=.995, max_fr=.1, freq=None):
+    '''
+    Merging NFA reduction (in place).
+
+    Parameters
+    ----------
+    aut : Nfa class
+        the NFA to reduce
+    freq : str, None
+        PCAP filename, or file with packet frequencies, or None
+    th :
+        merging threshold
+    mf :
+        maximal frequency merging parameter
+
+    Returns
+    -------
+    m
+        the number of merged states
+    '''    
     if freq == None: raise RuntimeError('packet frequency not provided')
     if not 0 <= th <= 1: raise RuntimeError('invalid threshold value')
     if not 0 <= max_fr <= 1: raise RuntimeError('invalid max_fr value')

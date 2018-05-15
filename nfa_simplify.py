@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# script for merging redundant states of the NFA
 
 import sys
 from nfa import Nfa

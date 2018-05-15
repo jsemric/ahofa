@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# implementation of NFA base class
 
 import re
 import math
@@ -208,6 +209,15 @@ class Nfa:
         del self._transitions[final_state]
 
     def fin_pred(self):
+        '''
+        Find all predecessor states of final states.
+
+        Return
+        ------
+        res
+            dictionary mapping final states: state that from which we can reach
+            that final state
+        '''
         res = dict()
         pred = self.pred
         for f in self._final_states:
@@ -248,6 +258,16 @@ class Nfa:
         return out
 
     def read(self, fdesc, how='fa'):
+        '''
+        Read an NFA from file.
+
+        Parameters
+        ----------
+        fdesc : file
+            file with an NFA
+        how : {'fa', 'ba'}
+            how to parse the input, fa or ba format
+        '''
         rules = 0
         trans_regex = getattr(Nfa, 'regex_trans_' + how)
         state_regex = getattr(Nfa, 'regex_state_' + how)
@@ -321,6 +341,29 @@ class Nfa:
     def write_dot(
         self, *, show_trans=False, freq=None, states=None, show_diff=False,
         freq_scale=None,state_labels=True):
+        '''
+        Converts NFA to the dot format.
+
+        Parameters
+        ----------
+        show_trans :
+            show transition labels
+        freq : dict
+            state frequencies
+        states : set
+            which states to show
+        show_diff :
+            show differences between frequencies of adjacent states
+        freq_scale :
+            scaling function for packet frequencies
+        state_labels :
+            show state labels
+
+        Return
+        ------
+        NFA in the dot format
+        '''
+
 
         succ = self.succ
 
@@ -397,6 +440,14 @@ class Nfa:
     ###########################################################################
 
     def merge_states(self, mapping):
+        '''
+        Merge given states.
+
+        Parameters
+        ----------
+        mapping : dict
+            mapping state1:state2 where state1 is merged into state2
+        '''
 
         if set(mapping.keys()) & set(mapping.values()):
             raise RuntimeError('merging not consistent')
@@ -423,6 +474,9 @@ class Nfa:
         self._final_states -= set(mapping.keys())
 
     def merge_redundant_states(self):
+        '''
+        Simplify the NFA by merging redundant states.
+        '''
         to_merge = set()
         pred = self.pred
 
@@ -438,6 +492,18 @@ class Nfa:
             self.merge_states({q:p for q in to_merge})
 
     def compute_freq(self, pcap):
+        '''
+        Call external program for calculating packet frequency for the NFA.
+
+        Parameters
+        ----------
+        pcap :
+            PCAP filename
+
+        Return
+        ------
+        dictionary containing state : frequency
+        '''
         fa_file = tempfile.NamedTemporaryFile()
         fr_file = tempfile.NamedTemporaryFile()
         with open(fa_file.name, 'w') as f:
@@ -446,6 +512,24 @@ class Nfa:
         return self.retrieve_freq(fr_file.name)
 
     def retrieve_freq(self, fname):
+        '''
+        Read frequencies from line-based file with the following syntax:
+
+        <state> <freq>
+        ...
+
+        The state is the state of the NFA (labels must match), and freq
+        is the corresponding packet frequency.
+
+        Parameters
+        ----------
+        fname:
+            filename
+
+        Return
+        ------
+        dictionary containing state : frequency
+        '''
         freq = {}
         with open(fname, 'r') as f:
             for line in f:
@@ -461,6 +545,25 @@ class Nfa:
 
     @classmethod
     def eval_accuracy(cls, target, reduced, pcap, *, nw=1):
+        '''
+        Call external program for error evaluation of the reduced NFA.
+
+        Parameters
+        ----------
+        target:
+            file with the original NFA
+        reduced:
+            file with the reduced NFA
+        pcap: str
+            PCAP filenames, separated by spaces
+        nw:
+            number of threads to run in parallel
+
+        Return
+        ------
+        string containing the values of evaluation statistics separated by a
+        comma
+        '''
         prog = ' '.join(['./nfa_eval', target, reduced, '-n', str(nw), pcap,
              '-c']).split()
         o = subpr.check_output(prog)
@@ -468,6 +571,24 @@ class Nfa:
 
 
     def get_freq(self, fname=None, freq_file=False, subtract=False):
+        '''
+        Get packet frequencies.
+
+        Parameters
+        ----------
+        fname:
+            filename of PCAP file or file with state frequencies
+        freq_file:
+            if set fname is considered to be file containing frequencies, not a
+            PCAP file
+        subtract:
+            if set, the states frequencies are subtracted by the packet
+            frequencies of reachable final states
+       
+        Return
+        ------
+        dictionary containing state : frequency
+        '''
         if fname == None:
             freq = {s:0 for s in self.states}
         elif freq_file:
@@ -483,6 +604,24 @@ class Nfa:
         return freq
 
     def get_armc_groups(self, pcap, th=.5):
+        '''
+        Call external program for computing similar sets of prefixes.
+
+        Parameters
+        ----------
+        pcap :
+            PCAP file
+        th :
+            similarity threshold
+
+        Return
+        ------
+        empty:
+            array of state which have empty sets of prefixes
+        sim:
+            array of pairs of states having similar prefixes (excluding states 
+            with empty sets)
+        '''
         fa_file = tempfile.NamedTemporaryFile()
         with open(fa_file.name, 'w') as f: self.print(f)
         out = subpr.check_output('./prefix_labeling {} {} {}'.format(

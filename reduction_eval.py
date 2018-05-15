@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# NFA reduction functions
 
 import sys, os
 import tempfile
@@ -20,7 +21,33 @@ def check_file(fname, dir=False):
             raise RuntimeError('file not found: ' + fname)
 
 
-def reduce_nfa(aut, freq=None, ratio=.25, merge=True, th=.995, mf=.1):
+def reduce_nfa(aut, freq=None, *, ratio=.25, merge=True, th=.995, mf=.1):
+    '''
+    Approximate NFA reduction. The reduction consists of pruning and merging 
+    based on packet frequency.
+
+    Parameters
+    ----------
+    aut : Nfa class
+        the NFA to reduce
+    freq : str, None
+        PCAP filename, or file with packet frequencies, or None
+    ratio :
+        reduction ratio
+    merge :
+        use merging reduction before pruning
+    th :
+        merging threshold
+    mf :
+        maximal frequency merging parameter
+
+    Returns
+    -------
+    aut
+        reduced NFA
+    m
+        the number of merged states
+    '''
     m = 0
     if merge:
         m = merging(aut, freq=freq, th=th, max_fr=mf)
@@ -30,7 +57,30 @@ def reduce_nfa(aut, freq=None, ratio=.25, merge=True, th=.995, mf=.1):
     pruning(aut, ratio, freq=freq)
     return aut, m
 
-def armc(aut, pcap, *, ratio=.25, th=.75, prune_empty=True):
+def armc(aut, pcap, *, ratio=.25, th=.75, merge_empty=True):
+    '''
+    NFA reduction based on merging similar sets of prefixes.
+
+    Parameters
+    ----------
+    aut : Nfa class
+        the NFA to reduce
+    pcap : str
+        PCAP filename
+    ratio :
+        reduction ratio
+    th :
+        merging threshold
+    merge_empty :
+        if set, reduction merges states with empty sets together
+
+    Returns
+    -------
+    aut
+        reduced NFA
+    m
+        the number of merged states
+    '''
     empty, eq = aut.get_armc_groups(pcap, th)
     
     mapping = {}
@@ -44,9 +94,11 @@ def armc(aut, pcap, *, ratio=.25, th=.75, prune_empty=True):
     mapping.pop(aut._initial_state, None)
     m = len(mapping)
 
-    if prune_empty:
+    if merge_empty:
+        # merge states with empty sets of prefixes together
         fin = {s:f for f,ss in aut.fin_pred().items() for s in ss}
         mapping.update({s:fin[s] for s in empty if not s in aut._final_states})
+        mapping.pop(aut._initial_state, None)
         aut.merge_states(mapping)
     else:
         aut.merge_states(mapping)
@@ -55,10 +107,33 @@ def armc(aut, pcap, *, ratio=.25, th=.75, prune_empty=True):
         ratio = ratio * cnt / (cnt - m)
         pruning(aut, ratio, freq=freq)
 
-    return m
+    return aut, m
 
 def reduce_eval(fa_name, *, test, train=None, ratios, merge=False, ths=[.995],
     mfs=[.1], nw=1):
+    '''
+    Perform several approximate reductions and store results to files.
+
+    Parameters
+    ----------
+    fa_name : str
+        name of the file with the NFA
+    test : list
+        ShellRegex expressions which matches PCAP files used for reduction error
+        evaluation
+    train :
+        PCAP filename used for calculating packet frequency
+    ratios : list
+        reduction ratios
+    merge :
+        use merging reduction before pruning
+    ths : list
+        merging thresholds
+    mfs : list
+        maximal frequency merging parameters
+    nw : int
+        number of threads to run in parallel
+    '''
 
     RED_DIR = 'experiments/nfa'
     ERR_CSV = 'experiments/eval.csv'

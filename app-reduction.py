@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Approximate NFA reduction and error evaluation of the reduction NFA.
 
 import sys
 import tempfile
@@ -35,17 +36,19 @@ def main():
     if (args.merge or args.armc) and not args.train:
         raise SystemError('--train option is required when merging')
 
+    # get NFA
     aut = Nfa.parse(args.input)
 
     if args.armc:
-        m = armc(aut, args.train, ratio=args.ratio, th=args.thresh,
-            prune_empty=0)
+        # merge using armc and prune
+        aut, m = armc(aut, args.train, ratio=args.ratio, th=args.thresh,
+            merge_empty=False)
         sys.stderr.write('Merged: ' + str(m) + '\n')
     else:
         sys.stderr.write('Reduction ratio: ' + str(args.ratio) + '\n')
         freq = aut.get_freq(args.train)
-        aut, m = reduce_nfa(aut, freq, args.ratio, args.merge, args.thresh,
-            args.maxfr)
+        aut, m = reduce_nfa(aut, freq, ratio=args.ratio, merge=args.merge,
+            th=args.thresh, mf=args.maxfr)
         if args.merge:
             sys.stderr.write('Merged: ' + str(m) + '\n')
 
