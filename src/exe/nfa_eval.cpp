@@ -25,16 +25,16 @@ namespace fs = boost::filesystem;
 
 const char *helpstr =
 "Usage: ./nfa_eval [OPTIONS] TARGET REDUCED PCAP...\n"
-"Compute statistics about for REDUCED automaton of the TARGET on PCAP files.\n"
-"TARGET and REDUCED are nfa of FA format\n"
-"PCAP are packet capture files\n"
+"Compute error of the REDUCED automaton wrt TARGET and PCAP files.\n"
+"TARGET and REDUCED are NFAs in the .fa format\n"
+"PCAP is a packet capture file\n"
 "\noptions:\n"
 "  -h            : show this help and exit\n"
-"  -o <FILE>     : specify output file\n"
+"  -o <FILE>     : specify the output file\n"
 "  -n <NWORKERS> : number of workers to run in parallel\n"
-"  -r            : rigorous stats computation, consistent but much slower,\n"
+"  -r            : rigorous error computation, consistent but much slower,\n"
 "                  use only if not sure about over-approximation\n"
-"  -c            : output in CSV format\n";
+"  -c            : output in the csv format\n";
 
 void write_nfa_stats(
     ostream &out, const vector<pair<string,NfaStats>> &data,
