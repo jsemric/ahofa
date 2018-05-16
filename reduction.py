@@ -75,7 +75,7 @@ def merging(aut, *, th=.995, max_fr=.1, freq=None):
         for p in actual:
             freq_p = freq[p]
             t = freq_p / max_
-            if not p in finals and freq_p != 0 and t < max_fr:
+            if not p in finals and freq_p != 0 and t <= max_fr:
                 for q in succ[p] - finals - set([p]):
                     freq_q = freq[q]
                     d = min(freq_q,freq_p) / max(freq_q,freq_p)
