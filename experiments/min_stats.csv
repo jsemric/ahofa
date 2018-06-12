@@ -1,0 +1,16 @@
+nfa,states,fin,trans
+dfa/backdoor.rules.00000.fa.min,558,528,147841
+dfa/backdoor.rules.00004.fa.min,727,663,197259
+dfa/backdoor.rules.00008.fa.min,2806,2321,805684
+dfa/backdoor.rules.00012.fa.min,3373,2657,992647
+dfa/backdoor.rules.00016.fa.min,4071,3050,1226540
+nfa/backdoor.rules.00000.fa.min,159,111,1364
+nfa/backdoor.rules.00004.fa.min,213,130,1471
+nfa/backdoor.rules.00008.fa.min,270,133,2336
+nfa/backdoor.rules.00012.fa.min,295,139,2644
+nfa/backdoor.rules.00016.fa.min,335,144,3482
+backdoor.rules.00000.fa,390,180,2333
+backdoor.rules.00004.fa,468,180,2486
+backdoor.rules.00008.fa,546,180,5661
+backdoor.rules.00012.fa,624,180,10379
+backdoor.rules.00016.fa,702,180,15096
