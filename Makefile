@@ -48,10 +48,9 @@ no-data:
 	rm -f obs* tmp* *.fsm *.fa *.pa *.ba *csv
 
 pack:
-	rm -f xsemri00.zip
-	zip -r xsemri00.zip src/*/*.hpp src/*/*.cpp Makefile nfa.py \
-	get_nfa_size.py draw_nfa.py app-reduction.py reduction.py \
-	reduction_eval.py README.txt data
+	rm -f ahofa.zip
+	zip -r ahofa.zip src/*/*.hpp src/*/*.cpp Makefile *.py \
+	README.md experiments automata
 
 clean:
 	rm -f $(COMMON)/*.o $(EXE)/*.o $(PROG)
