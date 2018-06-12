@@ -62,7 +62,7 @@ def make_plot(df, nfa_name, *, var='ce', xmin = 0, ymax=None, drop=None,
     plt.grid()
     plt.legend(loc='best')
     if save:
-        ax.get_figure().savefig('/home/james/Desktop/bt/figures/{}.png'.format(
+        ax.get_figure().savefig('figures/{}.png'.format(
             save))
     else:
         plt.show()
