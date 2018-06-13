@@ -29,7 +29,7 @@ def main():
 
     parser.add_argument(
         '-s','--sub', type=str, metavar='xNFA',
-        help='check whether L(NFA) >= L(xNFA)')
+        help='check whether L(NFA) is a subset of L(xNFA)')
 
     args = parser.parse_args()
 
