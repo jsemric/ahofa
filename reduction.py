@@ -79,7 +79,7 @@ def merging(aut, *, th=.995, max_fr=.1, freq=None):
                 for q in succ[p] - finals - set([p]):
                     freq_q = freq[q]
                     d = min(freq_q,freq_p) / max(freq_q,freq_p)
-                    if d > th: marked.append((p,q))
+                    if d > th and p != aut._initial_state: marked.append((p,q))
 
             new |= succ[p]
         actual = new - visited

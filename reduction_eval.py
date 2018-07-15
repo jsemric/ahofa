@@ -50,8 +50,8 @@ def reduce_nfa(aut, freq=None, *, ratio=.25, merge=True, th=.995, mf=.1):
     '''
     m = 0
     if merge:
-        m = merging(aut, freq=freq, th=th, max_fr=mf)
         cnt = aut.state_count
+        m = merging(aut, freq=freq, th=th, max_fr=mf)
         ratio = ratio * cnt / (cnt - m)
 
     pruning(aut, ratio, freq=freq)
