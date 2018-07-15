@@ -81,7 +81,7 @@ private:
     /// state + symbol = set of states
     /// faster then map, however harder to modify
     vector<vector<State>> trans_vector;
-    /// state label -> index
+    /// state label -> index in trans_vector
     map<State,State> state_map;
 
     static const unsigned shift = 8;
@@ -155,10 +155,11 @@ void NfaArray::parse_word(
 /// Parses a word through NfaArray and decides whether it is accepted.
 /// @param word packet payload or string
 /// @param length number of bytes in string
-/// @return True if a string is accepter, false otherwise
+/// @return True if a string is accepted, false otherwise
 inline bool NfaArray::accept(const Word word, unsigned length) const
 {
     set<State> actual{state_map.at(initial_state)};
+    auto state_map = get_reversed_state_map();
 
     for (unsigned i = 0; i < length && !actual.empty(); i++) {
         set<State> next;
@@ -167,8 +168,7 @@ inline bool NfaArray::accept(const Word word, unsigned length) const
             auto trans = trans_vector[(j << shift) + word[i]];
             if (!trans.empty()) {
                 for (auto k : trans) {
-                    // do something with visited state, use this information
-                    if (final_states.find(k) != final_states.end()) {
+                    if (final_states.find(state_map.at(k)) != final_states.end()) {
                         return true;
                     }
                     next.insert(k);
