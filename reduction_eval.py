@@ -21,7 +21,7 @@ def check_file(fname, dir=False):
             raise RuntimeError('file not found: ' + fname)
 
 
-def reduce_nfa(aut, freq=None, *, ratio=.25, merge=True, th=.995, mf=.1):
+def reduce_nfa(aut, freq=None, ratio=.25, merge=True, th=.995, mf=.1):
     '''
     Approximate NFA reduction. The reduction consists of pruning and merging 
     based on packet frequency.
@@ -50,14 +50,14 @@ def reduce_nfa(aut, freq=None, *, ratio=.25, merge=True, th=.995, mf=.1):
     '''
     m = 0
     if merge:
-        cnt = aut.state_count
+        cnt = aut.state_count #modified!!!!
         m = merging(aut, freq=freq, th=th, max_fr=mf)
-        ratio = ratio * cnt / (cnt - m)
+        ratio = ratio * float(cnt) / (cnt - m)
 
     pruning(aut, ratio, freq=freq)
     return aut, m
 
-def armc(aut, pcap, *, ratio=.25, th=.75, merge_empty=True):
+def armc(aut, pcap, ratio=.25, th=.75, merge_empty=True):
     '''
     NFA reduction based on merging similar sets of prefixes.
 
@@ -152,6 +152,11 @@ def reduce_eval(fa_name, *, test, train=None, ratios, merge=False, ths=[.995],
     for i in ratios: assert 0.0001 < i < 0.99
 
     aut = Nfa.parse(fa_name)
+    
+    cname = os.path.basename(fa_name).replace('.fa','')
+    orig_name = os.path.join(RED_DIR, cname + '.msfm')
+    with open(orig_name,'w') as f: aut.print(f,how='msfm')
+    
     freq = aut.get_freq(train)
     reduction_csv = []
     eval_csv = []
@@ -164,11 +169,16 @@ def reduce_eval(fa_name, *, test, train=None, ratios, merge=False, ths=[.995],
         while True:
             h = str(idx).zfill(5)
             reduced = os.path.join(RED_DIR, cname + '.' + h + '.fa')
+            msfm = os.path.join(RED_DIR, cname + '.' + h + '.msfm')
             if not os.path.exists(reduced): break
             idx += 1
 
         # save reduced nfa
+        a.merge_redundant_states()
         with open(reduced,'w') as f: a.print(f)
+        # save nfa in msfm format
+        with open(msfm,'w') as f: a.print(f,how='msfm')
+
         # store reduction result to csv
         pname = str(train)
 
