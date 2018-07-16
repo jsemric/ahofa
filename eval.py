@@ -41,8 +41,8 @@ def prune_cross_val():
     pass
 
 def reduce_many():
-    test = ['/home/vojta/pcap-sampled/aconet-sampled-div[1-9]']#'/home/vojta/pcaps/aconet-div121','/home/vojta/pcaps/aconet-div131','/home/vojta/pcaps/aconet-div141','/home/vojta/pcaps/aconet-div151']#,'/home/vojta/pcaps/aconet-div161','/home/vojta/pcaps/aconet-div171','/home/vojta/pcaps/aconet-div181','/home/vojta/pcaps/aconet-div191','/home/vojta/pcaps/aconet-div201']
-    train = '/home/vojta/pcap-sampled/aconet-sampled-div'
+    test = ['aconet-sampled-div[1-9]']
+    train = 'aconet-sampled-div'
     nw = 2 #number of cores, maximum on pclengal: 8
 
     '''
