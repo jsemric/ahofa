@@ -19,8 +19,8 @@ def pruning(aut, ratio=.25, *, freq):
         PCAP filename, or file with packet frequencies, or None
     
     '''
-    if not 0 < ratio < 1:
-        raise RuntimeError('invalid reduction ratio value: ' + str(ratio))
+    #if not 0 < ratio < 1:
+    #    raise RuntimeError('invalid reduction ratio value: ' + str(ratio))
 
     depth = aut.state_depth
     states = set(aut.states) - aut._final_states - set([aut._initial_state])
