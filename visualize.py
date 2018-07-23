@@ -36,7 +36,7 @@ def to_latex(df):
         print(i)
         #d = df.loc[(df.method != 'bfs') & (df.automaton == i)]
         d = df.loc[df.automaton == i]
-        d = d.pivot_table(index='ratio',columns='method',values=['ap','cp','states'])
+        d = d.pivot_table(index='ratio',columns='method',values=['ap','cp','throughput','states'])
         print(d.to_latex())
 
         print(d)
@@ -87,6 +87,7 @@ def main():
     df['ae'] = df.afp / df.total
     df['cp'] = df.ctp / (df.ctp + df.cfp)
     df['ap'] = df.atp / (df.atp + df.afp)
+    df['throughput'] = (df.atp + df.afp) / df.total
 
     df = df.sort_values('ratio')
     for i in df:
