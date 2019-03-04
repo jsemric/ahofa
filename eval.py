@@ -41,9 +41,9 @@ def prune_cross_val():
     pass
 
 def reduce_many():
-    test = ['pcaps/geant.pcap*', 'pcaps/meter4-1*']
-    train = 'pcaps/geant2.pcap'
-    nw = 14
+    test = ['aconet-sampled-div[1-9]']
+    train = 'aconet-sampled-div'
+    nw = 2 #number of cores, maximum on pclengal: 8
 
     '''
     ratios = np.arange(.14, 0.32, .02)
@@ -54,12 +54,15 @@ def reduce_many():
         merge=True, nw=nw)
     '''
 
-    ratios = np.arange(.14, 0.32, .02)
+    ratios = np.arange(.10, 0.41, .025)
     reduce_eval('automata/backdoor.rules.fa', test=test, ratios=ratios, nw=nw)
     reduce_eval('automata/backdoor.rules.fa', test=test, train=train,
         ratios=ratios, nw=nw)
     reduce_eval('automata/backdoor.rules.fa', test=test, train=train,
         ratios=ratios, merge=True,nw=nw)
+
+
+    return
 
     # try various merging parameters
     ratios = [.18]
@@ -95,7 +98,7 @@ def reduce_many():
         ratios=ratios, merge=True,nw=nw)
 
 def main():
-    armc_vs_merge_vs_prune()
+    reduce_many()
 
 if __name__ == '__main__':
     main()

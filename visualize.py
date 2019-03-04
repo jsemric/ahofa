@@ -27,19 +27,21 @@ def err_dist(df1,df2):
 
 def to_latex(df):
     # 1.1 A vs C - 2 graphs + rabit line
-    print('#1 prune ce vs ae')
-    print(df.loc[(df.automaton == 'sprobe') & (df.method == 'prune'),
-        ['ratio','ae','ce','ap','cp']].set_index('ratio').to_latex())
+    #print('#1 prune ce vs ae')
+    #print(df.loc[(df.automaton == 'sprobe') & (df.method == 'prune'),
+    #    ['ratio','ae','ce','ap','cp']].set_index('ratio').to_latex())
 
-    print('#4 large nfa')
+    print('Large nfa')
     for i in df.automaton.unique():
         print(i)
         #d = df.loc[(df.method != 'bfs') & (df.automaton == i)]
         d = df.loc[df.automaton == i]
-        d = d.pivot_table(index='ratio',columns='method',values=['ce','cp'])
+        d = d.pivot_table(index='ratio',columns='method',values=['ap','cp','throughput','states'])
         print(d.to_latex())
 
-def make_plot(df, nfa_name, *, var='ce', xmin = 0, ymax=None, drop=None,
+        print(d)
+
+def make_plot(df, nfa_name, var='ce', xmin = 0, ymax=None, drop=None,
     save=None):
 
     cols = ['method','ratio','ce','ae','cp','ap']
@@ -85,6 +87,7 @@ def main():
     df['ae'] = df.afp / df.total
     df['cp'] = df.ctp / (df.ctp + df.cfp)
     df['ap'] = df.atp / (df.atp + df.afp)
+    df['throughput'] = (df.atp + df.afp) / df.total
 
     df = df.sort_values('ratio')
     for i in df:
@@ -121,6 +124,8 @@ def main():
     plt.title('CE of merging with different parameters')
     plt.show()
     #'''
+     
+    #make_plot(df, 'backdoor.rules', var='cp', save='backdoor-cp')
 
     # 4 large nfas
     '''

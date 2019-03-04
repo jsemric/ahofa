@@ -118,6 +118,15 @@ class Nfa:
         return succ
 
     @property
+    def alphabet(self):
+        alph = set()
+        for state, rules in self._transitions.items():
+            for key, value in rules.items():
+                alph.add(key)
+        return alph
+
+
+    @property
     def state_depth(self):
         succ = self.succ
         sdepth = {state:0 for state in self.states}
@@ -317,6 +326,16 @@ class Nfa:
             yield str(self._initial_state) + '\n'
         elif how == 'ba':
             yield '[' + str(self._initial_state) + ']\n'
+        elif how == 'msfm':
+            yield '{}\n'.format(self.state_count)
+            yield '{}\n'.format(self.trans_count)
+            yield '{}'.format(self._initial_state)
+
+            alph_dict = {}
+            i = 0
+            for symbol in self.alphabet:
+               alph_dict[symbol] = i
+               i += 1
         else:
             raise NfaError('fa, dot or ba') # TODO
 
@@ -325,14 +344,27 @@ class Nfa:
                 for q in value:
                     if how == 'ba':
                         yield '{},[{}]->[{}]\n'.format(hex(key), state, q)
+                    elif how == 'msfm':
+                        yield '\n{}|{}|{}|0'.format(state, alph_dict[key], q) 
                     else:
                         yield '{} {} {}\n'.format(state, q, hex(key))
 
-        for qf in self._final_states:
-            if how == 'ba':
-                yield '[{}]\n'.format(qf)
-            else:
-                yield '{}\n'.format(qf)
+        if how=='msfm':
+            yield '\n######################################################################################\n'
+            yield '{}\n'.format(len(self._final_states))
+            for qf in self._final_states:
+                yield '{},'.format(qf)
+            yield '\n######################################################################################\n'
+
+            yield '{}'.format(len(alph_dict))
+            for symbol, index in alph_dict.items():
+                yield '\n{}:{}|'.format(index,hex(symbol))
+        else:
+            for qf in self._final_states:
+                if how == 'ba':
+                    yield '[{}]\n'.format(qf)
+                else:
+                    yield '{}\n'.format(qf)
 
     def print(self, f=None, *, how='fa'):
         for line in self.write(how=how):
@@ -453,6 +485,7 @@ class Nfa:
             raise RuntimeError('merging not consistent')
 
         states = set(self.states)
+        #mapping = {k:v for k,v in mapping.items() if k != self._initial_state}
 
         for p,q in mapping.items():
             if not p in states or not q in states:
@@ -633,4 +666,3 @@ class Nfa:
             p, q = ss.split()
             sim.append((int(p),int(q)))
         return empty, sim
-            
