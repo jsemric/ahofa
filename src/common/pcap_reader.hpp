@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <cassert>
 #include <mutex>
+#include <string>
+#include <sstream>
 
 #include <pcap.h>
 #include <pcap/pcap.h>
@@ -99,6 +101,18 @@ pcap_t* process_payload(pcap_t *pcap, F func, unsigned long count)
     {
         return pcap;
     }
+}
+
+template<typename F>
+void process_strings(std::string filename, F func, unsigned long count)
+{
+  std::ifstream infile(filename);
+  
+  std::string line;
+  while (std::getline(infile, line))
+  {
+    func((const unsigned char *)line.c_str(), line.length());
+  }
 }
 
 /// Extract payload from packet

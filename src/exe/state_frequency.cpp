@@ -60,12 +60,41 @@ map<State, unsigned long> compute_freq(
 map<State, unsigned long> compute_freq(
     const Nfa &nfa, string fname, int aflag = AFLAG_BOTH, size_t count=~0UL)
 {
-    char err_buf[4096] = "";
-    pcap_t *pcap;
-    if (!(pcap = pcap_open_offline(fname.c_str(), err_buf)))
-        throw std::ios_base::failure("cannot open pcap file '" + fname + "'");
+  
+    
+    // char err_buf[4096] = "";
+    // pcap_t *pcap;
+    // if (!(pcap = pcap_open_offline(fname.c_str(), err_buf)))
+    //     throw std::ios_base::failure("cannot open pcap file '" + fname + "'");
+    // 
+    // return compute_freq(nfa, pcap, aflag, count);
+    map<State, unsigned long> freq;
+    NfaArray m(nfa);
+    vector<size_t> state_freq(nfa.state_count());
 
-    return compute_freq(nfa, pcap, aflag, count);
+    pcapreader::process_strings(
+        fname,
+        [&] (const unsigned char *payload, unsigned len)
+        {
+            if (aflag >= AFLAG_BOTH) {
+                m.label_states(state_freq, payload, len);                
+            }
+            else {
+                // only accepted or ~accepted
+                if (m.accept(payload, len) == 1) {
+                    m.label_states(state_freq, payload, len);
+                }
+            }
+        }, count);
+
+    // remap frequencies
+    auto state_map = m.get_reversed_state_map();
+    for (unsigned long i = 0; i < nfa.state_count(); i++)
+    {
+        freq[state_map[i]] = state_freq[i];
+    }
+
+    return freq;
 }
 
 int main(int argc, char **argv)
