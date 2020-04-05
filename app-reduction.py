@@ -8,6 +8,7 @@ import multiprocessing
 
 from nfa import Nfa
 from reduction_eval import reduce_nfa, armc
+from helpers import export_frequency
 
 def main():
     parser = argparse.ArgumentParser(description='Approximate NFA reduction.')
@@ -21,6 +22,8 @@ def main():
         help='test pcap files')
     parser.add_argument('--train', type=str, metavar='PCAP',
         help='train pcap file')
+    parser.add_argument('-d', '--dest-dir', dest='dest_dir',
+        help='Destination dir for frequency export.')
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-m','--merge', action='store_true',
@@ -40,6 +43,7 @@ def main():
 
     # get NFA
     aut = Nfa.parse(args.input)
+    filename = args.input.split('/')[-1].split('.')[0]
 
     if args.armc:
         # merge using armc and prune
@@ -49,6 +53,8 @@ def main():
     else:
         sys.stderr.write('reduction ratio: ' + str(args.ratio) + '\n')
         freq = aut.get_freq(args.train)
+        if args.dest_dir:
+            export_frequency(freq, '{}{}.frq'.format(args.dest_dir, filename))
         aut, m = reduce_nfa(aut, freq, ratio=args.ratio, merge=args.merge,
             th=args.thresh, mf=args.maxfr)
         if args.merge:
