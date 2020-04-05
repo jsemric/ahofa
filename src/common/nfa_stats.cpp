@@ -5,6 +5,7 @@
 #include <ostream>
 #include <vector>
 #include <ctype.h>
+#include <stdlib.h>
 
 #include "nfa_stats.hpp"
 #include "nfa.hpp"
@@ -24,15 +25,15 @@ vector<pair<string,NfaStats>> compute_nfa_stats(
     const NfaArray &target, const NfaArray &reduced, const vector<string> &pcaps,
     bool consistent)
 {
-    for (auto i : pcaps) {
-        char err_buf[4096] = "";
-        pcap_t *p;
-
-        if (!(p = pcap_open_offline(i.c_str(), err_buf)))
-            throw runtime_error("Not a valid pcap file: \'" + i + "'");
-
-        pcap_close(p);
-    }
+    // for (auto i : pcaps) {
+    //     char err_buf[4096] = "";
+    //     pcap_t *p;
+    // 
+    //     if (!(p = pcap_open_offline(i.c_str(), err_buf)))
+    //         throw runtime_error("Not a valid pcap file: \'" + i + "'");
+    // 
+    //     pcap_close(p);
+    // }
 
     auto fidx_target = target.get_final_state_idx();
     auto fidx_reduced = reduced.get_final_state_idx();
@@ -41,7 +42,8 @@ vector<pair<string,NfaStats>> compute_nfa_stats(
     for (auto p : pcaps) {
         NfaStats stats(reduced.state_count(), target.state_count());
         try {
-            pcapreader::process_payload(
+            //pcapreader::process_payload(
+            pcapreader::process_strings(
                 p.c_str(),
                 [&] (const unsigned char *payload, unsigned len)
                 {

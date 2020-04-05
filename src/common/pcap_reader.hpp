@@ -49,6 +49,9 @@ pcap_t* init_pcap(const char* capturefile);
 template<typename F>
 pcap_t* process_payload(pcap_t *pcap, F func, unsigned long count = ~0UL);
 
+template<typename F>
+void process_strings(std::string filename, F func, unsigned long count = ~0UL);
+
 /// Generic function for processing packet payload.
 ///
 /// @param capturefile filename of PCAP file
