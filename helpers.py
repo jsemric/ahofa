@@ -1,5 +1,7 @@
-def export_frequency(freq, filepath):
-    f = open(filepath, 'w')
-    for state, frequency in freq.items():
-        f.write('{}:{}\n'.format(state, frequency))
-    f.close()
+def export_frequency(freq, filepath, train_file):
+    with open(train_file, 'r') as f:
+        string_count = int(f.readline())
+    with open(filepath, 'w') as f:
+        for state, frequency in freq.items():
+            significancy = frequency / string_count
+            f.write('{}:{}\n'.format(state, significancy))

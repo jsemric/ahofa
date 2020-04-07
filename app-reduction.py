@@ -54,7 +54,8 @@ def main():
         sys.stderr.write('reduction ratio: ' + str(args.ratio) + '\n')
         freq = aut.get_freq(args.train)
         if args.dest_dir:
-            export_frequency(freq, '{}{}.frq'.format(args.dest_dir, filename))
+            export_frequency(freq, '{}{}.sig'.format(args.dest_dir, filename), args.train)
+            exit()
         aut, m = reduce_nfa(aut, freq, ratio=args.ratio, merge=args.merge,
             th=args.thresh, mf=args.maxfr)
         if args.merge:

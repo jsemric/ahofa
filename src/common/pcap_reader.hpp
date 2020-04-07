@@ -112,8 +112,14 @@ void process_strings(std::string filename, F func, unsigned long count)
   std::ifstream infile(filename);
   
   std::string line;
+  bool first_line_encountered = false; 
   while (std::getline(infile, line))
   {
+    if(!first_line_encountered)
+    {
+      first_line_encountered = true;
+      continue;
+    }
     func((const unsigned char *)line.c_str(), line.length());
   }
 }
