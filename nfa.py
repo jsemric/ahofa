@@ -597,8 +597,9 @@ class Nfa:
         string containing the values of evaluation statistics separated by a
         comma
         '''
-        prog = ' '.join(['./nfa_eval', target, reduced, '-n', str(nw), pcap,
+        prog = ' '.join(['{}./nfa_eval'.format(os.getenv('AHOFA_PATH')), target, reduced, '-n', str(nw), pcap,
              '-c']).split()
+        sys.stderr.write('{}\n'.format(prog))
         o = subpr.check_output(prog)
         return o.decode("utf-8")
 
