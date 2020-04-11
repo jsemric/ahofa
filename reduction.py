@@ -87,7 +87,7 @@ def merging(aut, *, th=.995, max_fr=.1, freq=None):
     
     # handle transitivity
     g = networkx.Graph(marked)
-    for cluster in networkx.connected_component_subgraphs(g):
+    for cluster in connected_component_subgraphs(g):
         l = list(cluster.nodes())
         assert len(l) > 1
         for i in l[1:]: mapping[i] = l[0]
@@ -95,3 +95,7 @@ def merging(aut, *, th=.995, max_fr=.1, freq=None):
     aut.merge_states(mapping)
     # return the number of merged (removed) states
     return len(mapping)
+
+def connected_component_subgraphs(G):
+    for c in networkx.connected_components(G):
+        yield G.subgraph(c)
