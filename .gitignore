@@ -1,3 +1,4 @@
 *.o
 *.jar
 *.swp
+*.DS_Store

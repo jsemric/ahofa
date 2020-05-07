@@ -18,7 +18,7 @@ ahofa - Approximate Handling of Finite Automata
 The NFA format (with `.fa` extension) is line-based and has the following structure:
 ```
 <state>  // initial state
-<symbol> <state> <state>  // transitions
+<state> <state> <symbol in hexa> // transitions
 ...
 <state>  // final states
 ...
